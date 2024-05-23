@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -32,7 +33,8 @@ const (
 )
 
 var rootOpts struct {
-	LogLevel string
+	ConfigFile string
+	LogLevel   string
 }
 
 // rootCmd represents the base command when called without any subcommands
@@ -70,7 +72,14 @@ func bindEnv(key string, defaultValue ...any) {
 	}
 }
 
+var notImplemented = func(cmd *cobra.Command, args []string) error {
+	return errors.New("command not yet implemented")
+}
+
 func init() {
+	bindEnv("config", "./k3s.config.yaml")
+	rootCmd.PersistentFlags().StringVarP(&rootOpts.ConfigFile, "config", "c", viper.GetString("config"), "Path to the k3s-manager config file")
+
 	bindEnv("log-level", logrus.InfoLevel)
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.LogLevel, "log-level", "l", viper.GetString("log-level"), fmt.Sprintf("log level: %s", logger.GetAllLevels()))
 }
