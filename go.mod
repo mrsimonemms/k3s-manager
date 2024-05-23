@@ -3,6 +3,8 @@ module github.com/mrsimonemms/k3s-manager
 go 1.22.3
 
 require (
+	github.com/mrsimonemms/golang-helpers v0.1.1
+	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.18.2
 )
