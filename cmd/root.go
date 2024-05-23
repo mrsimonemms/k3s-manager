@@ -27,6 +27,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	// Load the providers
+	_ "github.com/mrsimonemms/k3s-manager/pkg/providers/hetzner"
 )
 
 const (
