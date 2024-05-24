@@ -23,6 +23,48 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestLoadFunc(t *testing.T) {
+	tests := []struct {
+		Name           string
+		YAML           string
+		ExpectedError  error
+		ExpectedResult *config.Config
+	}{
+		{
+			Name: "no error",
+			YAML: `apiVersion: v1alpha1
+cluster:
+  name: some-name`,
+			ExpectedError: nil,
+			ExpectedResult: &config.Config{
+				APIVersion: "v1alpha1",
+				Cluster: config.Cluster{
+					Name: "some-name",
+				},
+			},
+		},
+		{
+			Name: "invalid api",
+			YAML: `apiVersion: v1
+cluster:
+  name: some-name2`,
+			ExpectedError:  config.ErrInvalidAPIVersion,
+			ExpectedResult: nil,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			assert := assert.New(t)
+
+			cfg, err := config.Load([]byte(test.YAML))
+
+			assert.Equal(test.ExpectedError, err)
+			assert.Equal(test.ExpectedResult, cfg)
+		})
+	}
+}
+
 func TestNewFunc(t *testing.T) {
 	tests := []struct {
 		Name   string

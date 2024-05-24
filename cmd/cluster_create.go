@@ -17,6 +17,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +26,16 @@ import (
 var createCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new cluster",
-	RunE:  notImplemented,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg, err := loadConfigFile()
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("%+v\n", cfg)
+
+		return nil
+	},
 }
 
 func init() {

@@ -17,8 +17,18 @@
 package cmd
 
 import (
+	"os"
+
+	"github.com/mrsimonemms/golang-helpers/logger"
+	"github.com/mrsimonemms/k3s-manager/pkg/config"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
+
+var clusterOpts struct {
+	Validate bool
+}
 
 // clusterCmd represents the cluster command
 var clusterCmd = &cobra.Command{
@@ -26,6 +36,38 @@ var clusterCmd = &cobra.Command{
 	Short: "Cluster management commands",
 }
 
+func loadConfigFile() (*config.Config, error) {
+	l := logger.Log().WithFields(logrus.Fields{
+		"configFile": rootOpts.ConfigFile,
+	})
+
+	data, err := os.ReadFile(rootOpts.ConfigFile)
+	if err != nil {
+		l.WithError(err).Error("Failed to read config file")
+		return nil, err
+	}
+
+	cfg, err := config.Load(data)
+	if err != nil {
+		l.WithError(err).Error("Failed to load config")
+		return nil, err
+	}
+
+	if clusterOpts.Validate {
+		if err := cfg.Validate(); err != nil {
+			l.WithError(err).Error("Config is invalid")
+			return nil, err
+		}
+	}
+
+	l.Debug("Config is valid")
+
+	return cfg, nil
+}
+
 func init() {
 	rootCmd.AddCommand(clusterCmd)
+
+	bindEnv("validate", true)
+	clusterCmd.PersistentFlags().BoolVarP(&clusterOpts.Validate, "validate", "v", viper.GetBool("validate"), "Validate the config before using")
 }
