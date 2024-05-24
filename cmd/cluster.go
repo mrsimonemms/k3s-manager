@@ -17,8 +17,10 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/mrsimonemms/golang-helpers/logger"
 	"github.com/mrsimonemms/k3s-manager/pkg/config"
 	"github.com/sirupsen/logrus"
@@ -55,7 +57,19 @@ func loadConfigFile() (*config.Config, error) {
 
 	if clusterOpts.Validate {
 		if err := cfg.Validate(); err != nil {
-			l.WithError(err).Error("Config is invalid")
+			if validationErrors, ok := err.(validator.ValidationErrors); ok {
+				for _, vErr := range validationErrors {
+					l = l.WithFields(logrus.Fields{
+						"field": vErr.StructNamespace(),
+						"rule":  vErr.ActualTag(),
+					})
+				}
+				l.Error("Config is invalid")
+
+				return nil, fmt.Errorf("invalid config")
+			} else {
+				l.WithError(err).Error("Config is invalid")
+			}
 			return nil, err
 		}
 	}

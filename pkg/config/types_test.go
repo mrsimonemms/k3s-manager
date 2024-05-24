@@ -17,11 +17,61 @@
 package config_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/mrsimonemms/k3s-manager/pkg/config"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestConfig_Validate(t *testing.T) {
+	tests := []struct {
+		Name   string
+		Config *config.Config
+		Err    error
+	}{
+		{
+			Name: "valid",
+			Config: &config.Config{
+				APIVersion: config.APIVersion,
+				Cluster: config.Cluster{
+					Name: "some-cluster",
+				},
+			},
+		},
+		{
+			Name: "invalid api version",
+			Config: &config.Config{
+				APIVersion: "some-bad-api-version",
+				Cluster: config.Cluster{
+					Name: "some-cluster",
+				},
+			},
+			Err: config.ErrInvalidAPIVersion,
+		},
+		{
+			Name: "invalid config",
+			Config: &config.Config{
+				APIVersion: config.APIVersion,
+			},
+			Err: fmt.Errorf("Key: 'Config.Cluster.Name' Error:Field validation for 'Name' failed on the 'required' tag"),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			assert := assert.New(t)
+
+			err := test.Config.Validate()
+
+			if test.Err == nil {
+				assert.NoError(err)
+			} else {
+				assert.Error(err, test.Err)
+			}
+		})
+	}
+}
 
 func TestLoadFunc(t *testing.T) {
 	tests := []struct {

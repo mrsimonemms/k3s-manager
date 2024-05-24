@@ -20,18 +20,19 @@ import (
 	"fmt"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/go-playground/validator/v10"
 	"github.com/mrsimonemms/k3s-manager/pkg/common"
 	"sigs.k8s.io/yaml"
 )
 
 type Config struct {
-	APIVersion string `json:"apiVersion"`
+	APIVersion string `json:"apiVersion" validate:"required"`
 
 	Cluster `json:"cluster" envPrefix:"CLUSTER_"`
 }
 
 type Cluster struct {
-	Name string `json:"name,omitempty" env:"NAME" envDefault:"k3s-manager"`
+	Name string `json:"name,omitempty" env:"NAME" envDefault:"k3s-manager" validate:"required"`
 }
 
 func (c *Config) ToYAML() ([]byte, error) {
@@ -43,7 +44,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 
-	return nil
+	validate := validator.New(validator.WithRequiredStructEnabled())
+
+	return validate.Struct(c)
 }
 
 func Load(data []byte) (*Config, error) {
