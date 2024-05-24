@@ -38,8 +38,28 @@ func (c *Config) ToYAML() ([]byte, error) {
 	return yaml.Marshal(c)
 }
 
-func Load() (*Config, error) {
-	return nil, nil
+func (c *Config) Validate() error {
+	if err := ValidateAPIVersion(c.APIVersion); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func Load(data []byte) (*Config, error) {
+	cfg := &Config{}
+
+	// Load the file
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return nil, err
+	}
+
+	// API version is always validated
+	if err := ValidateAPIVersion(cfg.APIVersion); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
 }
 
 func New() (*Config, error) {
@@ -54,4 +74,12 @@ func New() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// Ensure the API version is valid - this doesn't really do anything at the moment, but exists for future-proofing
+func ValidateAPIVersion(version string) error {
+	if version != APIVersion {
+		return ErrInvalidAPIVersion
+	}
+	return nil
 }

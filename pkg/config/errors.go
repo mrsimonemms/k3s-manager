@@ -16,6 +16,6 @@
 
 package config
 
-const (
-	APIVersion = "v1alpha1"
-)
+import "errors"
+
+var ErrInvalidAPIVersion = errors.New("invalid api version")
