@@ -20,13 +20,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// updateCmd represents the update command
-var updateCmd = &cobra.Command{
+// clusterUpdateCmd represents the update command
+var clusterUpdateCmd = &cobra.Command{
 	Use:   "update",
-	Short: "Update a cluster",
+	Short: "Update the version of k3s running on a cluster",
 	RunE:  notImplemented,
 }
 
 func init() {
-	clusterCmd.AddCommand(updateCmd)
+	clusterCmd.AddCommand(clusterUpdateCmd)
 }

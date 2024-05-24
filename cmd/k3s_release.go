@@ -20,13 +20,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// releaseCmd represents the release command
-var releaseCmd = &cobra.Command{
+// k3sReleaseCmd represents the release command
+var k3sReleaseCmd = &cobra.Command{
 	Use:   "release",
 	Short: "List available k3s releases",
 	RunE:  notImplemented,
 }
 
 func init() {
-	k3sCmd.AddCommand(releaseCmd)
+	k3sCmd.AddCommand(k3sReleaseCmd)
 }

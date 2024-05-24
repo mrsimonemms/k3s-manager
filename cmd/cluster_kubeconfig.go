@@ -20,13 +20,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// kubeconfigCmd represents the kubeconfig command
-var kubeconfigCmd = &cobra.Command{
+// clusterKubeconfigCmd represents the kubeconfig command
+var clusterKubeconfigCmd = &cobra.Command{
 	Use:   "kubeconfig",
 	Short: "Get the cluster's kubeconfig",
 	RunE:  notImplemented,
 }
 
 func init() {
-	clusterCmd.AddCommand(kubeconfigCmd)
+	clusterCmd.AddCommand(clusterKubeconfigCmd)
 }
