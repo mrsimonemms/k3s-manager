@@ -1,7 +1,7 @@
 {
   "template": "https://github.com/mrsimonemms/new",
-  "commit": "fdb570bf5a2b5fb699b3cd3d595d6a3b734a7af3",
-  "checkout": "main",
+  "commit": "c5209d33f8be5b3850ea041851d385230d511a0f",
+  "checkout": null,
   "context": {
     "cookiecutter": {
       "project_name": "k3s-manager",
