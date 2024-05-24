@@ -17,16 +17,50 @@
 package cmd
 
 import (
+	"errors"
+	"fmt"
+	"os"
+
+	"github.com/mrsimonemms/k3s-manager/pkg/config"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
-// initCmd represents the init command
-var initCmd = &cobra.Command{
+var configInitOpts struct {
+	Force  bool
+	Output string
+}
+
+// configInitCmd represents the init command
+var configInitCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Create a new config file",
-	RunE:  notImplemented,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg, err := config.New()
+		if err != nil {
+			return err
+		}
+
+		yaml, err := cfg.ToYAML()
+		if err != nil {
+			return err
+		}
+
+		_, err = os.Stat(configInitOpts.Output)
+		if !errors.Is(err, os.ErrNotExist) && !configInitOpts.Force {
+			return fmt.Errorf("cannot overwrite file: %s", configInitOpts.Output)
+		}
+
+		return os.WriteFile(configInitOpts.Output, yaml, 0o644)
+	},
 }
 
 func init() {
-	configCmd.AddCommand(initCmd)
+	configCmd.AddCommand(configInitCmd)
+
+	bindEnv("force", false)
+	configInitCmd.Flags().BoolVarP(&configInitOpts.Force, "force", "f", viper.GetBool("force"), "Overwrite config file")
+
+	bindEnv("output", defaultConfigFile)
+	configInitCmd.Flags().StringVarP(&configInitOpts.Output, "output", "o", viper.GetString("output"), "Name of config file to create")
 }
