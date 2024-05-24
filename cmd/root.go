@@ -23,13 +23,15 @@ import (
 	"strings"
 
 	"github.com/mrsimonemms/golang-helpers/logger"
+	"github.com/mrsimonemms/k3s-manager/pkg/common"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
 const (
-	envvarPrefix = "KM"
+	defaultConfigFile = "k3s.config.yaml"
+	envvarPrefix      = common.EnvPrefix
 )
 
 var rootOpts struct {
@@ -77,7 +79,7 @@ var notImplemented = func(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	bindEnv("config", "./k3s.config.yaml")
+	bindEnv("config", defaultConfigFile)
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.ConfigFile, "config", "c", viper.GetString("config"), "Path to the k3s-manager config file")
 
 	bindEnv("log-level", logrus.InfoLevel)
