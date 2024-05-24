@@ -17,27 +17,16 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 )
 
-// createCmd represents the create command
-var createCmd = &cobra.Command{
-	Use:   "create",
-	Short: "Create a new cluster",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := loadConfigFile()
-		if err != nil {
-			return err
-		}
-
-		fmt.Printf("%+v\n", cfg)
-
-		return nil
-	},
+// clusterDeleteCmd represents the destroy command
+var clusterDeleteCmd = &cobra.Command{
+	Use:   "delete",
+	Short: "Delete a cluster",
+	RunE:  notImplemented,
 }
 
 func init() {
-	clusterCmd.AddCommand(createCmd)
+	clusterCmd.AddCommand(clusterDeleteCmd)
 }
