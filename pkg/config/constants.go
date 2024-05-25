@@ -17,5 +17,6 @@
 package config
 
 const (
-	APIVersion = "v1alpha1"
+	APIVersion         = "v1alpha1"
+	DefaultClusterName = "k3s-manager"
 )
