@@ -59,10 +59,7 @@ func loadConfigFile() (*config.Config, error) {
 		if err := cfg.Validate(); err != nil {
 			if validationErrors, ok := err.(validator.ValidationErrors); ok {
 				for _, vErr := range validationErrors {
-					l = l.WithFields(logrus.Fields{
-						"field": vErr.StructNamespace(),
-						"rule":  vErr.ActualTag(),
-					})
+					l = l.WithField(vErr.StructNamespace(), vErr.ActualTag())
 				}
 				l.Error("Config is invalid")
 
