@@ -36,6 +36,12 @@ func TestConfig_Validate(t *testing.T) {
 				APIVersion: config.APIVersion,
 				Cluster: config.Cluster{
 					Name: "some-cluster",
+					ManagerPool: config.ClusterNodePool{
+						Name:     "name",
+						Count:    1,
+						Type:     "some-type",
+						Location: "some-location",
+					},
 				},
 			},
 		},
@@ -126,19 +132,37 @@ func TestNewFunc(t *testing.T) {
 			Target: &config.Config{
 				APIVersion: config.APIVersion,
 				Cluster: config.Cluster{
-					Name: "k3s-manager",
+					Name: config.DefaultClusterName,
+					ManagerPool: config.ClusterNodePool{
+						Name:  "manager-pool",
+						Count: 1,
+					},
+					WorkerPools: []config.ClusterNodePool{},
+				},
+				Provider: config.Provider{
+					Config: map[string]any{},
 				},
 			},
 		},
 		{
 			Name: "cluster_name",
 			Env: map[string]string{
-				"K3M_CLUSTER_NAME": "some-name",
+				"K3M_CLUSTER_NAME":               "some-name",
+				"K3M_CLUSTER_MANAGER_POOL_NAME":  "new-manager-name",
+				"K3M_CLUSTER_MANAGER_POOL_COUNT": "3",
 			},
 			Target: &config.Config{
 				APIVersion: config.APIVersion,
 				Cluster: config.Cluster{
 					Name: "some-name",
+					ManagerPool: config.ClusterNodePool{
+						Name:  "new-manager-name",
+						Count: 3,
+					},
+					WorkerPools: []config.ClusterNodePool{},
+				},
+				Provider: config.Provider{
+					Config: map[string]any{},
 				},
 			},
 		},
