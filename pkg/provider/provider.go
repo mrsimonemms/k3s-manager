@@ -16,9 +16,13 @@
 
 package provider
 
-var providers map[string]Provider = map[string]Provider{}
+import "github.com/mrsimonemms/k3s-manager/pkg/config"
 
-func Get(name string) (Provider, error) {
+type Factory func(*config.Config) (Provider, error)
+
+var providers map[string]Factory = make(map[string]Factory)
+
+func Get(name string) (Factory, error) {
 	if provider, ok := providers[name]; ok {
 		return provider, nil
 	}
@@ -26,11 +30,11 @@ func Get(name string) (Provider, error) {
 	return nil, ErrUnknownProvider(name)
 }
 
-func List() map[string]Provider {
+func List() map[string]Factory {
 	return providers
 }
 
-func Register(name string, provider Provider) error {
+func Register(name string, provider Factory) error {
 	if _, err := Get(name); err != nil && err != ErrUnknownProvider(name) {
 		providers[name] = provider
 

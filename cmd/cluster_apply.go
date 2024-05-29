@@ -27,12 +27,13 @@ var clusterApplyCmd = &cobra.Command{
 	Use:   "apply",
 	Short: "Apply configuration to a cluster",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := loadConfigFile()
+		cfg, p, err := loadConfigFile()
 		if err != nil {
 			return err
 		}
 
-		fmt.Printf("%+v\n", cfg)
+		fmt.Printf("CFG\n%+v\n", cfg)
+		fmt.Printf("Provider\n%+v\n", p)
 
 		return nil
 	},

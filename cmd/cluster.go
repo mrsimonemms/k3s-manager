@@ -23,6 +23,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/mrsimonemms/golang-helpers/logger"
 	"github.com/mrsimonemms/k3s-manager/pkg/config"
+	"github.com/mrsimonemms/k3s-manager/pkg/provider"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -38,7 +39,7 @@ var clusterCmd = &cobra.Command{
 	Short: "Cluster management commands",
 }
 
-func loadConfigFile() (*config.Config, error) {
+func loadConfigFile() (*config.Config, provider.Provider, error) {
 	l := logger.Log().WithFields(logrus.Fields{
 		"configFile": rootOpts.ConfigFile,
 	})
@@ -46,13 +47,13 @@ func loadConfigFile() (*config.Config, error) {
 	data, err := os.ReadFile(rootOpts.ConfigFile)
 	if err != nil {
 		l.WithError(err).Error("Failed to read config file")
-		return nil, err
+		return nil, nil, err
 	}
 
 	cfg, err := config.Load(data)
 	if err != nil {
 		l.WithError(err).Error("Failed to load config")
-		return nil, err
+		return nil, nil, err
 	}
 
 	if clusterOpts.Validate {
@@ -63,17 +64,29 @@ func loadConfigFile() (*config.Config, error) {
 				}
 				l.Error("Config is invalid")
 
-				return nil, fmt.Errorf("invalid config")
+				return nil, nil, fmt.Errorf("invalid config")
 			} else {
 				l.WithError(err).Error("Config is invalid")
 			}
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
-	l.Debug("Config is valid")
+	l.Debug("Config is valid - executing the provider factory")
 
-	return cfg, nil
+	factory, err := provider.Get(cfg.Provider.ID)
+	if err != nil {
+		l.WithError(err).Error("Unknown provider")
+		return nil, nil, err
+	}
+
+	p, err := factory(cfg)
+	if err != nil {
+		l.WithError(err).Error("Error loading providing config")
+		return nil, nil, err
+	}
+
+	return cfg, p, nil
 }
 
 func init() {
