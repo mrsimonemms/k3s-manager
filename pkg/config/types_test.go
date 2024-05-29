@@ -43,6 +43,11 @@ func TestConfig_Validate(t *testing.T) {
 						Location: "some-location",
 					},
 				},
+				K3s: config.K3s{
+					Datastore: config.K3sDatastore{
+						Type: config.K3S_DATASTORE_TYPE_ETCD,
+					},
+				},
 			},
 		},
 		{
@@ -139,6 +144,11 @@ func TestNewFunc(t *testing.T) {
 					},
 					WorkerPools: []config.ClusterNodePool{},
 				},
+				K3s: config.K3s{
+					Datastore: config.K3sDatastore{
+						Type: config.K3S_DATASTORE_TYPE_ETCD,
+					},
+				},
 				Provider: config.Provider{
 					Config: map[string]any{},
 				},
@@ -160,6 +170,11 @@ func TestNewFunc(t *testing.T) {
 						Count: 3,
 					},
 					WorkerPools: []config.ClusterNodePool{},
+				},
+				K3s: config.K3s{
+					Datastore: config.K3sDatastore{
+						Type: config.K3S_DATASTORE_TYPE_ETCD,
+					},
 				},
 				Provider: config.Provider{
 					Config: map[string]any{},
