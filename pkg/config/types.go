@@ -67,8 +67,21 @@ type NodeTaint struct {
 }
 
 type K3s struct {
-	Version string `json:"version,omitempty" env:"VERSION"`
+	Datastore K3sDatastore `json:"datastore" envPrefix:"K3S_DATASTORE_" validate:"required"`
+	Version   string       `json:"version,omitempty" env:"VERSION"` // If empty, uses the latest
 }
+
+type K3sDatastore struct {
+	Type     K3sDatastoreType `json:"type" env:"TYPE" validate:"required"`
+	Endpoint string           `json:"endpoint,omitempty" env:"ENDPOINT" validate:"required_if=Type external"`
+}
+
+type K3sDatastoreType string
+
+const (
+	K3S_DATASTORE_TYPE_ETCD     K3sDatastoreType = "etcd"
+	K3S_DATASTORE_TYPE_EXTERNAL K3sDatastoreType = "external"
+)
 
 type Provider struct {
 	ID     string         `json:"id" env:"ID"`
@@ -119,6 +132,11 @@ func New() (*Config, error) {
 				Count: 1,
 			},
 			WorkerPools: []ClusterNodePool{},
+		},
+		K3s: K3s{
+			Datastore: K3sDatastore{
+				Type: K3S_DATASTORE_TYPE_ETCD,
+			},
 		},
 		Provider: Provider{
 			Config: map[string]any{},
