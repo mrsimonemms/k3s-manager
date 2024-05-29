@@ -17,12 +17,31 @@
 package hetzner
 
 import (
+	"github.com/mitchellh/mapstructure"
 	"github.com/mrsimonemms/golang-helpers/logger"
+	"github.com/mrsimonemms/k3s-manager/pkg/config"
 	"github.com/mrsimonemms/k3s-manager/pkg/provider"
 )
 
 func init() {
-	if err := provider.Register(Name, &Hetzner{}); err != nil {
+	if err := provider.Register(Name, factory); err != nil {
 		logger.Log().WithField("name", Name).WithError(err).Panic("Provider name already registered")
 	}
+}
+
+func factory(k3mCfg *config.Config) (provider.Provider, error) {
+	l := logger.Log().WithField("provider", Name)
+
+	l.Debug("Loading provider")
+
+	var cfg Config
+	if err := mapstructure.Decode(k3mCfg.Provider.Config, &cfg); err != nil {
+		return nil, err
+	}
+
+	return &Hetzner{
+		cfg:    cfg,
+		k3mCfg: k3mCfg,
+		logger: l,
+	}, nil
 }

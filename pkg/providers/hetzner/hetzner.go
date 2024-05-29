@@ -20,10 +20,20 @@ import (
 	"context"
 	"errors"
 
+	"github.com/mrsimonemms/k3s-manager/pkg/config"
 	"github.com/mrsimonemms/k3s-manager/pkg/provider"
+	"github.com/sirupsen/logrus"
 )
 
-type Hetzner struct{}
+type Config struct {
+	Token string
+}
+
+type Hetzner struct {
+	cfg    Config
+	k3mCfg *config.Config
+	logger *logrus.Entry
+}
 
 var errNotImplemented = errors.New("command not yet implemented")
 
