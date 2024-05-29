@@ -22,7 +22,7 @@ import (
 )
 
 func init() {
-	if err := provider.Register(Name, &Provider{}); err != nil {
+	if err := provider.Register(Name, &Hetzner{}); err != nil {
 		logger.Log().WithField("name", Name).WithError(err).Panic("Provider name already registered")
 	}
 }

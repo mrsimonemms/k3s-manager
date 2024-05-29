@@ -16,4 +16,45 @@
 
 package hetzner
 
-type Provider struct{}
+import (
+	"context"
+	"errors"
+
+	"github.com/mrsimonemms/k3s-manager/pkg/provider"
+)
+
+type Hetzner struct{}
+
+var errNotImplemented = errors.New("command not yet implemented")
+
+func (h *Hetzner) ApplyCSI(context.Context) (*provider.ApplyCSIResponse, error) {
+	return nil, errNotImplemented
+}
+
+func (h *Hetzner) DatastoreCreate(context.Context) (*provider.DatastoreCreateResponse, error) {
+	return nil, errNotImplemented
+}
+
+func (h *Hetzner) DatastoreDelete(context.Context) (*provider.DatastoreDeleteResponse, error) {
+	return nil, errNotImplemented
+}
+
+func (h *Hetzner) LoadBalancerCreate(context.Context) (*provider.LoadBalancerCreateResponse, error) {
+	return nil, errNotImplemented
+}
+
+func (h *Hetzner) LoadBalancerDelete(context.Context) (*provider.LoadBalancerDeleteResponse, error) {
+	return nil, errNotImplemented
+}
+
+func (h *Hetzner) NodeCreate(context.Context) (*provider.NodeCreateResponse, error) {
+	return nil, errNotImplemented
+}
+
+func (h *Hetzner) NodeDelete(context.Context) (*provider.NodeDeleteResponse, error) {
+	return nil, errNotImplemented
+}
+
+func (h *Hetzner) Prepare(context.Context) (*provider.PrepareResponse, error) {
+	return nil, errNotImplemented
+}

@@ -16,4 +16,64 @@
 
 package provider
 
-type Provider interface{}
+import "context"
+
+type Provider interface {
+	// CSI management
+	//
+	// A Container Storage Interface allows Kubernetes to use volumes provided
+	// by the cloud provider
+	//
+	// @link https://kubernetes.io/blog/2019/01/15/container-storage-interface-ga/
+	ApplyCSI(context.Context) (*ApplyCSIResponse, error) // Apply the CSI to the cluster
+
+	// Datastore management
+	//
+	// K3s requires a datastore for workload management. This command is only
+	// used if not using in-cluster etcd.
+	//
+	// This may not be provided by all providers
+	//
+	// @link https://docs.k3s.io/datastore
+	DatastoreCreate(context.Context) (*DatastoreCreateResponse, error) // Create the datastore
+	DatastoreDelete(context.Context) (*DatastoreDeleteResponse, error) // Delete the datastore
+
+	// Load balancer management
+	//
+	// Load balancers are used for multi-node manager clusters and may be
+	// used by worker nodes.
+	LoadBalancerCreate(context.Context) (*LoadBalancerCreateResponse, error)
+	LoadBalancerDelete(context.Context) (*LoadBalancerDeleteResponse, error)
+
+	// Node management
+	//
+	// Nodes are the servers in the cluster. They can be managers or
+	// workers and may be manually or automatically scaled. At it's
+	// smallest, there must be at least one manager node.
+	NodeCreate(context.Context) (*NodeCreateResponse, error)
+	NodeDelete(context.Context) (*NodeDeleteResponse, error)
+
+	// Prepare
+	//
+	// Prepare the cloud for installing K3s. This typically would
+	// involve ensuring a network, a firewall and at least one server.
+	// This must be an idempotent command that ensures these things
+	// exist.
+	Prepare(context.Context) (*PrepareResponse, error)
+}
+
+type ApplyCSIResponse struct{}
+
+type DatastoreCreateResponse struct{}
+
+type DatastoreDeleteResponse struct{}
+
+type LoadBalancerCreateResponse struct{}
+
+type LoadBalancerDeleteResponse struct{}
+
+type NodeCreateResponse struct{}
+
+type NodeDeleteResponse struct{}
+
+type PrepareResponse struct{}
