@@ -17,10 +17,12 @@
 package hetzner
 
 import (
+	"github.com/hetznercloud/hcloud-go/v2/hcloud"
 	"github.com/mitchellh/mapstructure"
 	"github.com/mrsimonemms/golang-helpers/logger"
 	"github.com/mrsimonemms/k3s-manager/pkg/config"
 	"github.com/mrsimonemms/k3s-manager/pkg/provider"
+	"github.com/sirupsen/logrus"
 )
 
 func init() {
@@ -29,13 +31,23 @@ func init() {
 	}
 }
 
-func factory(k3mCfg *config.Config) (provider.Provider, error) {
+type debugWriter struct {
+	logger *logrus.Entry
+}
+
+func (d *debugWriter) Write(p []byte) (n int, err error) {
+	d.logger.WithField("data", string(p)).Trace("Hetzner API call")
+
+	return len(p), nil
+}
+
+func factory(k3m *config.Config) (provider.Provider, error) {
 	l := logger.Log().WithField("provider", Name)
 
 	l.Debug("Loading provider")
 
 	var cfg Config
-	if err := mapstructure.Decode(k3mCfg.Provider.Config, &cfg); err != nil {
+	if err := mapstructure.Decode(k3m.Provider.Config, &cfg); err != nil {
 		return nil, err
 	}
 
@@ -43,9 +55,19 @@ func factory(k3mCfg *config.Config) (provider.Provider, error) {
 		return nil, err
 	}
 
+	if err := cfg.load(); err != nil {
+		return nil, err
+	}
+
 	return &Hetzner{
-		cfg:    cfg,
-		k3mCfg: k3mCfg,
-		logger: l,
+		client: hcloud.NewClient(
+			hcloud.WithToken(cfg.Token),
+			hcloud.WithDebugWriter(&debugWriter{
+				logger: l,
+			}),
+		),
+		cfg:         k3m,
+		providerCfg: cfg,
+		logger:      l,
 	}, nil
 }

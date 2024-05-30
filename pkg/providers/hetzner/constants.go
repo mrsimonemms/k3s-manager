@@ -16,6 +16,18 @@
 
 package hetzner
 
-const (
-	Name = "hetzner"
+import (
+	"fmt"
+
+	"github.com/hetznercloud/hcloud-go/v2/hcloud"
 )
+
+const (
+	Name         = "hetzner"
+	DefaultImage = "ubuntu-24.04"
+	DefaultArch  = string(hcloud.ArchitectureX86)
+)
+
+var ErrMultipleCandidates = func(resource string) error {
+	return fmt.Errorf("multiple %s resources exist", resource)
+}

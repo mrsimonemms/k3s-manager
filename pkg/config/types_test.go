@@ -54,8 +54,8 @@ func TestConfig_Validate(t *testing.T) {
 						SSH: config.GlobalCIDR,
 					},
 					Location: "some-location",
-					SSHPort: config.DefaultSSHPort,
-					Subnet: config.DefaultNetworkCIDR,
+					SSHPort:  config.DefaultSSHPort,
+					Subnet:   config.DefaultNetworkCIDR,
 				},
 			},
 		},
@@ -164,7 +164,7 @@ func TestNewFunc(t *testing.T) {
 						SSH: config.GlobalCIDR,
 					},
 					SSHPort: config.DefaultSSHPort,
-					Subnet: config.DefaultNetworkCIDR,
+					Subnet:  config.DefaultNetworkCIDR,
 				},
 				Provider: config.Provider{
 					Config: map[string]any{},
@@ -199,7 +199,7 @@ func TestNewFunc(t *testing.T) {
 						SSH: config.GlobalCIDR,
 					},
 					SSHPort: config.DefaultSSHPort,
-					Subnet: config.DefaultNetworkCIDR,
+					Subnet:  config.DefaultNetworkCIDR,
 				},
 				Provider: config.Provider{
 					Config: map[string]any{},
