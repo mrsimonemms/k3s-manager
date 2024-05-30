@@ -17,8 +17,10 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/mrsimonemms/golang-helpers/logger"
 	"github.com/spf13/cobra"
 )
 
@@ -32,8 +34,20 @@ var clusterApplyCmd = &cobra.Command{
 			return err
 		}
 
+		ctx := context.Background()
+
+		// Prepare the cloud provider. This is provider-specific, so will
+		// be different for each, but likely be a case of ensuring a network,
+		// firewall and initial server.
+		logger.Log().Debug("Preparing cloud provider")
+		prepare, err := p.Prepare(ctx)
+		if err != nil {
+			logger.Log().WithError(err).Error("Error preparing cloud")
+		}
+
 		fmt.Printf("CFG\n%+v\n", cfg)
 		fmt.Printf("Provider\n%+v\n", p)
+		fmt.Printf("Prepare\n%+v\n", prepare)
 
 		return nil
 	},

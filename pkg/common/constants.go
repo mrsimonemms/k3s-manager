@@ -17,5 +17,8 @@
 package common
 
 const (
-	EnvPrefix = "K3M" // When using environment variables, this is the prefix
+	EnvPrefix    = "K3M" // When using environment variables, this is the prefix
+	Namespace    = "k3smanager.dev"
+	LabelManager = "manager"
+	LabelWorker  = "worker"
 )

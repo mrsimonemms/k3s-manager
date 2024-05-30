@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package config
+package hetzner
 
-const (
-	APIVersion         = "v1alpha1"
-	DefaultClusterName = "k3s-manager"
-	DefaultNetworkCIDR = "10.0.0.0/16"
-	DefaultSSHPort     = 22
-	GlobalCIDR         = "0.0.0.0/0"
-	GlobalCIDRv6       = "::/0"
+import "errors"
+
+var (
+	ErrBadSSHKey         = errors.New("bad ssh key")
+	ErrUnknownImage      = errors.New("unknown server image")
+	ErrUnknownLocation   = errors.New("unknown server location")
+	ErrUnknownServerType = errors.New("unknown server type")
 )
