@@ -29,8 +29,9 @@ import (
 type Config struct {
 	APIVersion string `json:"apiVersion" validate:"required"`
 
-	Cluster `json:"cluster" envPrefix:"CLUSTER_"`
-	K3s     `json:"k3s" envPrefix:"K3S_"`
+	Cluster    `json:"cluster" envPrefix:"CLUSTER_"`
+	K3s        `json:"k3s" envPrefix:"K3S_"`
+	Networking `json:"networking" envPrefix:"NETWORKING_"`
 
 	Provider `json:"provider" envPrefix:"PROVIDER_"`
 }
@@ -82,6 +83,18 @@ const (
 	K3S_DATASTORE_TYPE_ETCD     K3sDatastoreType = "etcd"
 	K3S_DATASTORE_TYPE_EXTERNAL K3sDatastoreType = "external"
 )
+
+type Networking struct {
+	NetworkingAllowed `json:"allowed" envPrefix:"ALLOWED_"`
+	Location          string `json:"location" env:"LOCATION" validate:"required"`
+	SSHPort           int    `json:"sshPort" env:"SSH_PORT" validate:"required,numeric"`
+	Subnet            string `json:"subnet" env:"SUBNET" validate:"required,cidr"`
+}
+
+type NetworkingAllowed struct {
+	API string `json:"api" env:"API" validate:"required,cidr"`
+	SSH string `json:"ssh" env:"SSH" validate:"required,cidr"`
+}
 
 type Provider struct {
 	ID     string         `json:"id" env:"ID"`
@@ -137,6 +150,14 @@ func New() (*Config, error) {
 			Datastore: K3sDatastore{
 				Type: K3S_DATASTORE_TYPE_ETCD,
 			},
+		},
+		Networking: Networking{
+			NetworkingAllowed: NetworkingAllowed{
+				API: GlobalCIDR,
+				SSH: GlobalCIDR,
+			},
+			SSHPort: DefaultSSHPort,
+			Subnet:  DefaultNetworkCIDR,
 		},
 		Provider: Provider{
 			Config: map[string]any{},
