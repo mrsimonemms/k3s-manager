@@ -48,6 +48,15 @@ func TestConfig_Validate(t *testing.T) {
 						Type: config.K3S_DATASTORE_TYPE_ETCD,
 					},
 				},
+				Networking: config.Networking{
+					NetworkingAllowed: config.NetworkingAllowed{
+						API: config.GlobalCIDR,
+						SSH: config.GlobalCIDR,
+					},
+					Location: "some-location",
+					SSHPort: config.DefaultSSHPort,
+					Subnet: config.DefaultNetworkCIDR,
+				},
 			},
 		},
 		{
@@ -149,6 +158,14 @@ func TestNewFunc(t *testing.T) {
 						Type: config.K3S_DATASTORE_TYPE_ETCD,
 					},
 				},
+				Networking: config.Networking{
+					NetworkingAllowed: config.NetworkingAllowed{
+						API: config.GlobalCIDR,
+						SSH: config.GlobalCIDR,
+					},
+					SSHPort: config.DefaultSSHPort,
+					Subnet: config.DefaultNetworkCIDR,
+				},
 				Provider: config.Provider{
 					Config: map[string]any{},
 				},
@@ -175,6 +192,14 @@ func TestNewFunc(t *testing.T) {
 					Datastore: config.K3sDatastore{
 						Type: config.K3S_DATASTORE_TYPE_ETCD,
 					},
+				},
+				Networking: config.Networking{
+					NetworkingAllowed: config.NetworkingAllowed{
+						API: config.GlobalCIDR,
+						SSH: config.GlobalCIDR,
+					},
+					SSHPort: config.DefaultSSHPort,
+					Subnet: config.DefaultNetworkCIDR,
 				},
 				Provider: config.Provider{
 					Config: map[string]any{},
