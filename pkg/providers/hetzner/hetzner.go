@@ -20,13 +20,26 @@ import (
 	"context"
 	"errors"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/mrsimonemms/k3s-manager/pkg/config"
 	"github.com/mrsimonemms/k3s-manager/pkg/provider"
 	"github.com/sirupsen/logrus"
 )
 
 type Config struct {
-	Token string
+	Token string `validate:"required"`
+	SSHKey
+}
+
+type SSHKey struct {
+	Public  string `validate:"required,file"`
+	Private string `validate:"required,file"`
+}
+
+func (c *Config) Validate() error {
+	validate := validator.New(validator.WithRequiredStructEnabled())
+
+	return validate.Struct(c)
 }
 
 type Hetzner struct {

@@ -39,6 +39,10 @@ func factory(k3mCfg *config.Config) (provider.Provider, error) {
 		return nil, err
 	}
 
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
 	return &Hetzner{
 		cfg:    cfg,
 		k3mCfg: k3mCfg,
