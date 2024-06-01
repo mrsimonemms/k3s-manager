@@ -46,14 +46,16 @@ type Cluster struct {
 }
 
 type ClusterNodePool struct {
-	Name   string      `json:"name" env:"NAME" validate:"required" `
+	Name   string      `json:"name" env:"NAME" validate:"required"`
 	Count  int         `json:"count" env:"COUNT" validate:"required,gt=0"`
 	Labels []NodeLabel `json:"labels,omitempty" validate:"dive,required"`
 	Taints []NodeTaint `json:"taints,omitempty" validate:"dive,required"`
 
 	// All of these values are provider-specific
-	Type     string `json:"type" env:"TYPE" validate:"required"`
-	Location string `json:"location" env:"LOCATION" validate:"required"`
+	Type     string  `json:"type" env:"TYPE" validate:"required"`
+	Location string  `json:"location" env:"LOCATION" validate:"required"`
+	Image    *string `json:"image,omitempty" env:"IMAGE"` // If not specified, this will use the default as-specified by the provider
+	Arch     *string `json:"arch,omitempty" env:"ARCH"`   // If not specified, this will use the default as-specified by the provider
 }
 
 type NodeLabel struct {
