@@ -10,6 +10,7 @@ header:
     - "go.*"
     - "**/*.{json,md,yml,yaml}"
     - "**/.gitkeep"
+    - "**/*.tpl"
   comment: on-failure
   language:
     Go:

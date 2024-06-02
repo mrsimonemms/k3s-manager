@@ -17,12 +17,15 @@
 package hetzner
 
 import (
+	"bytes"
 	"context"
+	_ "embed"
 	"errors"
 	"fmt"
 	"net"
 	"os"
 	"strconv"
+	"text/template"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -32,6 +35,9 @@ import (
 	"github.com/mrsimonemms/k3s-manager/pkg/provider"
 	"github.com/sirupsen/logrus"
 )
+
+//go:embed cloud-init/manager.yaml.tpl
+var cloudInitManager []byte
 
 type Config struct {
 	Token string `validate:"required"`
@@ -133,7 +139,7 @@ func (h *Hetzner) Prepare(ctx context.Context) (*provider.PrepareResponse, error
 	}
 
 	// Add the manager type to the labels
-	labels[generateLabelKey("type")] = common.LabelManager
+	labels[generateLabelKey("type")] = string(common.NodeTypeManager)
 	if err := labels.Validate(); err != nil {
 		return nil, err
 	}
@@ -154,7 +160,7 @@ func (h *Hetzner) Prepare(ctx context.Context) (*provider.PrepareResponse, error
 	return nil, nil
 }
 
-func (h *Hetzner) CreateServer(ctx context.Context, name string, nodeConfig config.ClusterNodePool, labels labelSelector, sshKey *hcloud.SSHKey, placementGroup *hcloud.PlacementGroup) (*hcloud.Server, error) {
+func (h *Hetzner) CreateServer(ctx context.Context, name string, nodeConfig config.ClusterNodePool, labels labelSelector, sshKey *hcloud.SSHKey, placementGroup *hcloud.PlacementGroup, nodeType common.NodeType) (*hcloud.Server, error) {
 	if nodeConfig.Image == nil {
 		nodeConfig.Image = hcloud.Ptr(DefaultImage)
 	}
@@ -169,6 +175,7 @@ func (h *Hetzner) CreateServer(ctx context.Context, name string, nodeConfig conf
 		"labels":   labels,
 		"image":    nodeConfig.Image,
 		"arch":     nodeConfig.Arch,
+		"nodeType": nodeType,
 	})
 
 	l.Info("Creating new server")
@@ -206,6 +213,26 @@ func (h *Hetzner) CreateServer(ctx context.Context, name string, nodeConfig conf
 		return nil, ErrUnknownImage
 	}
 
+	var userDataTpl string
+	if nodeType == common.NodeTypeManager {
+		userDataTpl = string(cloudInitManager)
+	}
+
+	l.Debug("Parse cloud-init template")
+	tpl, err := template.New("cloud-init").Parse(userDataTpl)
+	if err != nil {
+		l.WithError(err).Error("Unable to parse cloud-init template")
+		return nil, err
+	}
+	var userData bytes.Buffer
+	if err := tpl.Execute(&userData, map[string]any{
+		"SSHPort": h.cfg.Networking.SSHPort,
+	}); err != nil {
+		l.WithError(err).Error("Error executing cloud-init template")
+		return nil, err
+	}
+
+	l.Debug("Create the server")
 	result, _, err := h.client.Server.Create(ctx, hcloud.ServerCreateOpts{
 		Name:           name,
 		Location:       location,
@@ -214,6 +241,7 @@ func (h *Hetzner) CreateServer(ctx context.Context, name string, nodeConfig conf
 		Labels:         labels,
 		SSHKeys:        []*hcloud.SSHKey{sshKey},
 		PlacementGroup: placementGroup,
+		UserData:       userData.String(),
 	})
 	if err != nil {
 		l.WithError(err).Error("Error triggering manager server creation")
@@ -249,7 +277,7 @@ func (h *Hetzner) ensureManagerServer(ctx context.Context, labels labelSelector,
 	l.WithField("count", serverCount).Debug("Number of servers found")
 
 	if serverCount == 0 {
-		server, err := h.CreateServer(ctx, fmt.Sprintf("%s-%s-%d", h.cfg.Name, h.cfg.ManagerPool.Name, 0), h.cfg.ManagerPool, labels, sshKey, placementGroup)
+		server, err := h.CreateServer(ctx, fmt.Sprintf("%s-%s-%d", h.cfg.Name, h.cfg.ManagerPool.Name, 0), h.cfg.ManagerPool, labels, sshKey, placementGroup, common.NodeTypeManager)
 		if err != nil {
 			return nil, err
 		}
