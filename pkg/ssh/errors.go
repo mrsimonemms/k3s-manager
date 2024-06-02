@@ -14,19 +14,11 @@
  * limitations under the License.
  */
 
-package provider
+package ssh
 
-import (
-	"errors"
-	"fmt"
-)
+import "errors"
 
 var (
-	ErrProviderExists = func(name string) error {
-		return fmt.Errorf("provider already exists: %s", name)
-	}
-	ErrUnknownProvider = func(name string) error {
-		return fmt.Errorf("unknown provider: %s", name)
-	}
-	ErrNotOneManagerProvided = errors.New("did not receive one manager to configure")
+	ErrCloudInit = errors.New("cloud-init run errored")
+	ErrTimeout   = errors.New("ssh timeout")
 )

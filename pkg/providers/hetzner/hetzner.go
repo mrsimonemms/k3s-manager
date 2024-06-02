@@ -28,11 +28,13 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/appleboy/easyssh-proxy"
 	"github.com/go-playground/validator/v10"
 	"github.com/hetznercloud/hcloud-go/v2/hcloud"
 	"github.com/mrsimonemms/k3s-manager/pkg/common"
 	"github.com/mrsimonemms/k3s-manager/pkg/config"
 	"github.com/mrsimonemms/k3s-manager/pkg/provider"
+	"github.com/mrsimonemms/k3s-manager/pkg/ssh"
 	"github.com/sirupsen/logrus"
 )
 
@@ -144,20 +146,43 @@ func (h *Hetzner) Prepare(ctx context.Context) (*provider.PrepareResponse, error
 		return nil, err
 	}
 
-	// Ensure at least one manager server
-	if _, err := h.ensureManagerServer(ctx, labels, sshKey, placementGroup, network); err != nil {
+	// Ensure at least one manager server - this will only return one, but allow for extension
+	managers, err := h.ensureManagerServer(ctx, labels, sshKey, placementGroup, network)
+	if err != nil {
 		return nil, err
 	}
 
 	// Ensure manager load balancer if multiple manager nodes
+	tlsSANs := make([]string, 0)
 	if h.cfg.Cluster.ManagerPool.Count > 1 {
+		// Add the load balancer IP in the TLS SANs
 		return nil, errNotImplemented
 		// if _, err := h.ensureManagerLoadBalancer(ctx, labels) ; err != nil {
 		// 	return nil, err
 		// }
 	}
 
-	return nil, nil
+	managerList := make([]provider.PrepareResponseServer, 0)
+
+	for _, s := range managers {
+		managerList = append(managerList, provider.PrepareResponseServer{
+			SSH: ssh.New(easyssh.MakeConfig{
+				User:    common.MachineUser,
+				Server:  s.PublicNet.IPv4.IP.String(),
+				Port:    strconv.Itoa(h.cfg.Networking.SSHPort),
+				Key:     string(h.providerCfg.privateContent),
+				Timeout: 10 * time.Second,
+			}),
+		})
+
+		// Add manager's IP to the TLS SANs
+		tlsSANs = append(tlsSANs, s.PublicNet.IPv4.IP.String())
+	}
+
+	return &provider.PrepareResponse{
+		Managers: managerList,
+		TLSSANs:  tlsSANs,
+	}, nil
 }
 
 func (h *Hetzner) CreateServer(ctx context.Context, name string, nodeConfig config.ClusterNodePool, labels labelSelector, sshKey *hcloud.SSHKey, placementGroup *hcloud.PlacementGroup, nodeType common.NodeType, network *hcloud.Network) (*hcloud.Server, error) {

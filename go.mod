@@ -3,6 +3,7 @@ module github.com/mrsimonemms/k3s-manager
 go 1.22.3
 
 require (
+	github.com/appleboy/easyssh-proxy v1.5.0
 	github.com/caarlos0/env/v11 v11.0.1
 	github.com/go-playground/validator/v10 v10.20.0
 	github.com/google/uuid v1.4.0
@@ -18,9 +19,11 @@ require (
 )
 
 require (
+	github.com/ScaleFT/sshkeys v1.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
+	github.com/dchest/bcrypt_pbkdf v0.0.0-20150205184540-83f37f9c154a // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.4 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect

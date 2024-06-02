@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/mrsimonemms/golang-helpers/logger"
 	"github.com/spf13/cobra"
@@ -43,11 +42,13 @@ var clusterApplyCmd = &cobra.Command{
 		prepare, err := p.Prepare(ctx)
 		if err != nil {
 			logger.Log().WithError(err).Error("Error preparing cloud")
+			return err
 		}
 
-		fmt.Printf("CFG\n%+v\n", cfg)
-		fmt.Printf("Provider\n%+v\n", p)
-		fmt.Printf("Prepare\n%+v\n", prepare)
+		if err := prepare.EnsureK3sManager(ctx, cfg); err != nil {
+			logger.Log().WithError(err).Error("Error ensuring K3s manager")
+			return err
+		}
 
 		return nil
 	},
