@@ -16,7 +16,9 @@
 
 package provider
 
-import "context"
+import (
+	"context"
+)
 
 type Provider interface {
 	// CSI management
@@ -75,5 +77,3 @@ type LoadBalancerDeleteResponse struct{}
 type NodeCreateResponse struct{}
 
 type NodeDeleteResponse struct{}
-
-type PrepareResponse struct{}
