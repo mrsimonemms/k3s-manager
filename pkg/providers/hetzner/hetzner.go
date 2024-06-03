@@ -509,7 +509,7 @@ func (h *Hetzner) ensureFirewall(ctx context.Context, labels labelSelector, netw
 			{
 				Description: hcloud.Ptr("Allow access to KubeAPI"),
 				Direction:   hcloud.FirewallRuleDirectionIn,
-				Protocol:    hcloud.FirewallRuleProtocolUDP,
+				Protocol:    hcloud.FirewallRuleProtocolTCP,
 				Port:        hcloud.Ptr("6443"),
 				SourceIPs: []net.IPNet{
 					*apiAllowed,
