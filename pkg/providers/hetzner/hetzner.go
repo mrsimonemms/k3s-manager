@@ -304,7 +304,7 @@ func (h *Hetzner) ensureSSHKeys(ctx context.Context, labels labelSelector) (*hcl
 	if sshKey == nil {
 		// Upload the key
 		uploadedSSHKey, _, err := h.client.SSHKey.Create(ctx, hcloud.SSHKeyCreateOpts{
-			Name:      h.cfg.Name,
+			Name:      common.AppendRandomString(h.cfg.Name, 6),
 			PublicKey: string(h.providerCfg.publicContent),
 			Labels:    labels,
 		})
