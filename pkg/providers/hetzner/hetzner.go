@@ -145,7 +145,7 @@ func (h *Hetzner) Prepare(ctx context.Context) (*provider.PrepareResponse, error
 	}
 
 	// Ensure at least one manager server
-	if _, err := h.ensureManagerServer(ctx, labels, sshKey, placementGroup); err != nil {
+	if _, err := h.ensureManagerServer(ctx, labels, sshKey, placementGroup, network); err != nil {
 		return nil, err
 	}
 
@@ -160,7 +160,7 @@ func (h *Hetzner) Prepare(ctx context.Context) (*provider.PrepareResponse, error
 	return nil, nil
 }
 
-func (h *Hetzner) CreateServer(ctx context.Context, name string, nodeConfig config.ClusterNodePool, labels labelSelector, sshKey *hcloud.SSHKey, placementGroup *hcloud.PlacementGroup, nodeType common.NodeType) (*hcloud.Server, error) {
+func (h *Hetzner) CreateServer(ctx context.Context, name string, nodeConfig config.ClusterNodePool, labels labelSelector, sshKey *hcloud.SSHKey, placementGroup *hcloud.PlacementGroup, nodeType common.NodeType, network *hcloud.Network) (*hcloud.Server, error) {
 	if nodeConfig.Image == nil {
 		nodeConfig.Image = hcloud.Ptr(DefaultImage)
 	}
@@ -169,13 +169,14 @@ func (h *Hetzner) CreateServer(ctx context.Context, name string, nodeConfig conf
 	}
 
 	l := h.logger.WithFields(logrus.Fields{
-		"name":     name,
-		"type":     nodeConfig.Type,
-		"location": nodeConfig.Location,
-		"labels":   labels,
-		"image":    nodeConfig.Image,
-		"arch":     nodeConfig.Arch,
-		"nodeType": nodeType,
+		"name":      name,
+		"type":      nodeConfig.Type,
+		"location":  nodeConfig.Location,
+		"labels":    labels,
+		"image":     nodeConfig.Image,
+		"arch":      nodeConfig.Arch,
+		"nodeType":  nodeType,
+		"networkId": network.ID,
 	})
 
 	l.Info("Creating new server")
@@ -241,6 +242,7 @@ func (h *Hetzner) CreateServer(ctx context.Context, name string, nodeConfig conf
 		ServerType:     serverType,
 		Image:          image,
 		Labels:         labels,
+		Networks:       []*hcloud.Network{network},
 		SSHKeys:        []*hcloud.SSHKey{sshKey},
 		PlacementGroup: placementGroup,
 		UserData:       userData.String(),
@@ -255,12 +257,14 @@ func (h *Hetzner) CreateServer(ctx context.Context, name string, nodeConfig conf
 		return nil, err
 	}
 
+	l = l.WithField("serverId", result.Server.ID)
+
 	l.Info("Server created")
 
 	return result.Server, nil
 }
 
-func (h *Hetzner) ensureManagerServer(ctx context.Context, labels labelSelector, sshKey *hcloud.SSHKey, placementGroup *hcloud.PlacementGroup) ([]*hcloud.Server, error) {
+func (h *Hetzner) ensureManagerServer(ctx context.Context, labels labelSelector, sshKey *hcloud.SSHKey, placementGroup *hcloud.PlacementGroup, network *hcloud.Network) ([]*hcloud.Server, error) {
 	l := h.logger.WithField("labels", labels)
 
 	// Don't use the upsert workflow as may be multiple servers
@@ -279,7 +283,7 @@ func (h *Hetzner) ensureManagerServer(ctx context.Context, labels labelSelector,
 	l.WithField("count", serverCount).Debug("Number of servers found")
 
 	if serverCount == 0 {
-		server, err := h.CreateServer(ctx, fmt.Sprintf("%s-%s-%d", h.cfg.Name, h.cfg.ManagerPool.Name, 0), h.cfg.ManagerPool, labels, sshKey, placementGroup, common.NodeTypeManager)
+		server, err := h.CreateServer(ctx, fmt.Sprintf("%s-%s-%d", h.cfg.Name, h.cfg.ManagerPool.Name, 0), h.cfg.ManagerPool, labels, sshKey, placementGroup, common.NodeTypeManager, network)
 		if err != nil {
 			return nil, err
 		}
@@ -564,55 +568,19 @@ func (h *Hetzner) ensureNetwork(ctx context.Context, labels labelSelector) (*hcl
 				Name:    h.cfg.Name,
 				IPRange: subnet,
 				Labels:  labels,
+				Subnets: []hcloud.NetworkSubnet{
+					{
+						Type:        hcloud.NetworkSubnetTypeCloud,
+						IPRange:     subnet,
+						NetworkZone: hcloud.NetworkZone(h.cfg.Networking.Location),
+					},
+				},
 			})
 
 			return network, err
 		},
 		update: func(ctx context.Context, network *hcloud.Network) (*hcloud.Network, error) {
-			networkSubnets := []hcloud.NetworkSubnet{
-				{
-					Type:        hcloud.NetworkSubnetTypeCloud,
-					IPRange:     subnet,
-					NetworkZone: hcloud.NetworkZone(h.cfg.Networking.Location),
-				},
-			}
-
-			for _, s := range network.Subnets {
-				l1 := l.WithField("subnet", s)
-
-				l1.Debug("Deleting old subnet")
-				action, _, err := h.client.Network.DeleteSubnet(ctx, network, hcloud.NetworkDeleteSubnetOpts{
-					Subnet: s,
-				})
-				if err != nil {
-					l1.WithError(err).Error("Error registering subnet deletion action")
-					return nil, err
-				}
-
-				if err := h.waitForActionCompletion(ctx, action); err != nil {
-					l1.WithError(err).Error("Error deleting subnet")
-					return nil, err
-				}
-			}
-
-			for _, s := range networkSubnets {
-				l1 := l.WithField("subnet", s)
-
-				l1.Debug("Adding new subnet")
-				action, _, err := h.client.Network.AddSubnet(ctx, network, hcloud.NetworkAddSubnetOpts{
-					Subnet: s,
-				})
-				if err != nil {
-					l1.WithError(err).Error("Error registering subnet add action")
-					return nil, err
-				}
-
-				if err := h.waitForActionCompletion(ctx, action); err != nil {
-					l1.WithError(err).Error("Error adding subnet")
-					return nil, err
-				}
-			}
-
+			// @todo(sje): handle changes to the network subnet
 			return network, nil
 		},
 	}.exec(ctx)
