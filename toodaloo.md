@@ -5,3 +5,4 @@
 | File | Line Number | Author | Message |
 | --- | --- | --- | --- |
 | [pkg/config/types.go](pkg/config/types.go#L43) | 43 | Simon Emms <simon@simonemms.com> | envPrefix not yet supported for slices |
+| [pkg/providers/hetzner/cloud-init/manager.yaml.tpl](pkg/providers/hetzner/cloud-init/manager.yaml.tpl#L8) | 8 | Simon Emms <simon@simonemms.com> | figure out why changing the port isn't working |

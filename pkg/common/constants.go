@@ -17,8 +17,9 @@
 package common
 
 const (
-	EnvPrefix = "K3M" // When using environment variables, this is the prefix
-	Namespace = "k3smanager.dev"
+	EnvPrefix   = "K3M" // When using environment variables, this is the prefix
+	MachineUser = "k3smanager"
+	Namespace   = "k3smanager.dev"
 )
 
 type NodeType string

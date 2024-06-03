@@ -226,7 +226,9 @@ func (h *Hetzner) CreateServer(ctx context.Context, name string, nodeConfig conf
 	}
 	var userData bytes.Buffer
 	if err := tpl.Execute(&userData, map[string]any{
-		"SSHPort": h.cfg.Networking.SSHPort,
+		"PublicKey": string(h.providerCfg.publicContent),
+		"SSHPort":   h.cfg.Networking.SSHPort,
+		"User":      common.MachineUser,
 	}); err != nil {
 		l.WithError(err).Error("Error executing cloud-init template")
 		return nil, err
