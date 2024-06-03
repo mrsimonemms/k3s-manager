@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/mrsimonemms/k3s-manager/pkg/config"
+	"github.com/mrsimonemms/k3s-manager/pkg/ssh"
 	v1 "k8s.io/api/core/v1"
 )
 
@@ -109,4 +110,27 @@ func (k *K3s) GenerateInstallCommand() string {
 	}
 
 	return fmt.Sprintf(`curl -sfL %s | INSTALL_K3S_EXEC="%s" %s sh -`, downloadUrl, k.installExec(), k.installOpts())
+}
+
+func GetKubeconfig(s ssh.SSH, publicAddress string) ([]byte, error) {
+	stdout, _, _, err := s.Run("sudo cat /etc/rancher/k3s/k3s.yaml")
+	if err != nil {
+		return nil, err
+	}
+
+	kubeconfig := strings.NewReplacer(
+		"127.0.0.1", publicAddress,
+		"localhost", publicAddress,
+	)
+
+	return []byte(kubeconfig.Replace(stdout)), nil
+}
+
+func GetJoinToken(s ssh.SSH) ([]byte, error) {
+	stdout, _, _, err := s.Run("sudo cat /var/lib/rancher/k3s/server/token")
+	if err != nil {
+		return nil, err
+	}
+
+	return []byte(stdout), nil
 }
