@@ -27,22 +27,34 @@ import (
 )
 
 type PrepareResponse struct {
-	Managers []PrepareResponseServer
-	TLSSANs  []string
+	Managers       []PrepareResponseServer
+	KubeconfigHost string
 }
 
 type PrepareResponseServer struct {
 	SSH ssh.SSH
 }
 
-// EnsureK3sManager applies K3s to the specified manager clusters to the given configuration
-func (p *PrepareResponse) EnsureK3sManager(ctx context.Context, cfg *config.Config) error {
+type K3sAccessSecrets struct {
+	JoinToken  []byte
+	Kubeconfig []byte
+}
+
+func (p *PrepareResponse) ensureOneManager() (*PrepareResponseServer, error) {
 	// @todo(sje): find a nicer way of handling multiple managers
 	if len(p.Managers) != 1 {
-		return ErrNotOneManagerProvided
+		return nil, ErrNotOneManagerProvided
 	}
 
-	manager := p.Managers[0]
+	return &p.Managers[0], nil
+}
+
+// EnsureK3sManager applies K3s to the specified manager clusters to the given configuration
+func (p *PrepareResponse) EnsureK3sManager(ctx context.Context, cfg *config.Config) error {
+	manager, err := p.ensureOneManager()
+	if err != nil {
+		return err
+	}
 
 	logger.Log().Info("Waiting for manager to become ready")
 	if err := manager.SSH.WaitUntilCloudInitReady(ctx); err != nil {
@@ -55,7 +67,7 @@ func (p *PrepareResponse) EnsureK3sManager(ctx context.Context, cfg *config.Conf
 		JoinToken:  nil, // Initial manager
 		NodeLabels: cfg.ManagerPool.Labels,
 		NodeTaints: cfg.ManagerPool.Taints,
-		TLSSANs:    p.TLSSANs,
+		TLSSANs:    []string{p.KubeconfigHost},
 
 		K3sVersion: "", // @todo(sje): add version
 	}
@@ -77,4 +89,26 @@ func (p *PrepareResponse) EnsureK3sManager(ctx context.Context, cfg *config.Conf
 	logger.Log().Info("K3s is installed to the manager node")
 
 	return nil
+}
+
+func (p *PrepareResponse) GetK3sAccessSecrets() (*K3sAccessSecrets, error) {
+	manager, err := p.ensureOneManager()
+	if err != nil {
+		return nil, err
+	}
+
+	kubeconfig, err := k3s.GetKubeconfig(manager.SSH, p.KubeconfigHost)
+	if err != nil {
+		return nil, err
+	}
+
+	joinToken, err := k3s.GetJoinToken(manager.SSH)
+	if err != nil {
+		return nil, err
+	}
+
+	return &K3sAccessSecrets{
+		JoinToken:  joinToken,
+		Kubeconfig: kubeconfig,
+	}, nil
 }

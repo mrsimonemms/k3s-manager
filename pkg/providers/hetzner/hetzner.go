@@ -153,7 +153,7 @@ func (h *Hetzner) Prepare(ctx context.Context) (*provider.PrepareResponse, error
 	}
 
 	// Ensure manager load balancer if multiple manager nodes
-	tlsSANs := make([]string, 0)
+	var kubeconfigHost string
 	if h.cfg.Cluster.ManagerPool.Count > 1 {
 		// Add the load balancer IP in the TLS SANs
 		return nil, errNotImplemented
@@ -176,12 +176,12 @@ func (h *Hetzner) Prepare(ctx context.Context) (*provider.PrepareResponse, error
 		})
 
 		// Add manager's IP to the TLS SANs
-		tlsSANs = append(tlsSANs, s.PublicNet.IPv4.IP.String())
+		kubeconfigHost = s.PublicNet.IPv4.IP.String()
 	}
 
 	return &provider.PrepareResponse{
-		Managers: managerList,
-		TLSSANs:  tlsSANs,
+		Managers:       managerList,
+		KubeconfigHost: kubeconfigHost,
 	}, nil
 }
 

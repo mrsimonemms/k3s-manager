@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/mrsimonemms/golang-helpers/logger"
 	"github.com/spf13/cobra"
@@ -49,6 +50,15 @@ var clusterApplyCmd = &cobra.Command{
 			logger.Log().WithError(err).Error("Error ensuring K3s manager")
 			return err
 		}
+
+		s, err := prepare.GetK3sAccessSecrets()
+		if err != nil {
+			return err
+		}
+		fmt.Println("kube")
+		fmt.Println(string(s.Kubeconfig))
+		fmt.Println("token")
+		fmt.Println(string(s.JoinToken))
 
 		return nil
 	},
