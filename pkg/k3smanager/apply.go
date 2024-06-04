@@ -16,8 +16,214 @@
 
 package k3smanager
 
-import "context"
+import (
+	"bytes"
+	"context"
+	"embed"
+	"fmt"
+	"io/fs"
+	"os"
+	"strings"
+	"text/template"
 
-func Apply(ctx context.Context) error {
-	return nil
+	"github.com/Masterminds/sprig/v3"
+	"github.com/mrsimonemms/golang-helpers/logger"
+	"github.com/mrsimonemms/k3s-manager/pkg/common"
+	"github.com/mrsimonemms/k3s-manager/pkg/config"
+	"github.com/mrsimonemms/k3s-manager/pkg/provider"
+	"github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer/yaml"
+	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/restmapper"
+	"k8s.io/client-go/tools/clientcmd"
+)
+
+//go:embed templates/*.yaml
+var templates embed.FS
+
+type Kubeclient struct {
+	Config        *rest.Config
+	Clientset     *kubernetes.Clientset
+	DynamicClient *dynamic.DynamicClient
+}
+
+type TemplateData struct {
+	Config    *config.Config
+	JoinToken string
+}
+
+func login(kubeconfig []byte) (*Kubeclient, error) {
+	var l *logrus.Entry
+	var err error
+	var config *rest.Config
+
+	if kubeconfig == nil {
+		// Login with in-cluster workflow
+		l = logger.Log().WithField("method", "in-cluster")
+		l.Debug("Logging into cluster")
+
+		config, err = rest.InClusterConfig()
+		if err != nil {
+			l.WithError(err).Error("Failed to login")
+			return nil, err
+		}
+	} else {
+		// Kubeconfig provided - login with out-of-cluster workflow
+		l = logger.Log().WithField("method", "out-of-cluster")
+		l.Debug("Logging into cluster")
+
+		file, err := os.CreateTemp("", "kubeconfig")
+		if err != nil {
+			l.WithError(err).Error("Failed to create temp file")
+			return nil, err
+		}
+
+		l = l.WithField("file", file.Name())
+
+		if _, err := file.Write(kubeconfig); err != nil {
+			l.WithError(err).Error("Failed to write kubeconfig")
+			return nil, err
+		}
+
+		defer func() {
+			l.WithField("filename", file.Name()).Debug("Deleting kubeconfig tempfile")
+			err = os.Remove(file.Name())
+		}()
+
+		l.Debug("Logging into cluster")
+		config, err = clientcmd.BuildConfigFromFlags("", file.Name())
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	l.Debug("Getting kubernetes client")
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	dd, err := dynamic.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Kubeclient{
+		Config:        config,
+		Clientset:     clientset,
+		DynamicClient: dd,
+	}, err
+}
+
+func ParseTemplates(data TemplateData) (*string, error) {
+	tpl, err := template.New("k8s").
+		Funcs(sprig.FuncMap()).
+		Funcs(helmFuncs).
+		ParseFS(templates, "templates/*.yaml")
+	if err != nil {
+		return nil, err
+	}
+
+	files := make([]string, 0)
+	if err := fs.WalkDir(templates, ".", func(path string, d fs.DirEntry, err error) error {
+		if d.IsDir() {
+			return nil
+		}
+
+		file, _ := strings.CutPrefix(path, "templates/")
+
+		var output bytes.Buffer
+		if err := tpl.ExecuteTemplate(&output, file, data); err != nil {
+			return err
+		}
+
+		c := fmt.Sprintf("# %s\n", file)
+		c += output.String()
+		files = append(files, c)
+
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	// Convert all the YAML into sortable RuntimeObjects
+	o, err := YAMLToSortableObjects(files)
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort the objects
+	s, err := SortByKind(o)
+	if err != nil {
+		return nil, err
+	}
+
+	// Now put it back together in the correct order
+	var output string
+	for _, i := range s {
+		output += "---\n"
+		output += i.Content
+		output += "\n"
+	}
+
+	return common.Ptr(output), nil
+}
+
+// Apply will only be run from outside the cluster
+func Apply(ctx context.Context, cfg *config.Config, secrets *provider.K3sAccessSecrets) error {
+	kubeconfig, err := login(secrets.Kubeconfig)
+	if err != nil {
+		return err
+	}
+
+	templates, err := ParseTemplates(TemplateData{
+		Config:    cfg,
+		JoinToken: string(secrets.JoinToken),
+	})
+	if err != nil {
+		return err
+	}
+
+	decoder := yamlutil.NewYAMLOrJSONDecoder(strings.NewReader(*templates), 100)
+	var rawObj runtime.RawExtension
+	if err = decoder.Decode(&rawObj); err != nil {
+		return err
+	}
+
+	obj, gvk, err := yaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme).Decode(rawObj.Raw, nil, nil)
+	if err != nil {
+		return err
+	}
+
+	unstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+	if err != nil {
+		return err
+	}
+
+	unstructuredObj := &unstructured.Unstructured{Object: unstructuredMap}
+
+	gr, err := restmapper.GetAPIGroupResources(kubeconfig.Clientset.Discovery())
+	if err != nil {
+		return err
+	}
+
+	mapper := restmapper.NewDiscoveryRESTMapper(gr)
+	mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+	if err != nil {
+		return err
+	}
+
+	dri := kubeconfig.DynamicClient.Resource(mapping.Resource).Namespace("kube-system")
+
+	_, err = dri.Apply(ctx, "k3s-manager", unstructuredObj, metav1.ApplyOptions{
+		FieldManager: "k3s-manager",
+	})
+
+	return err
 }

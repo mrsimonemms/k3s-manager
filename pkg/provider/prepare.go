@@ -49,8 +49,8 @@ func (p *PrepareResponse) ensureOneManager() (*PrepareResponseServer, error) {
 	return &p.Managers[0], nil
 }
 
-// EnsureK3sManager applies K3s to the specified manager clusters to the given configuration
-func (p *PrepareResponse) EnsureK3sManager(ctx context.Context, cfg *config.Config) error {
+// EnsureK3s applies K3s to the specified manager clusters to the given configuration
+func (p *PrepareResponse) EnsureK3s(ctx context.Context, cfg *config.Config) error {
 	manager, err := p.ensureOneManager()
 	if err != nil {
 		return err

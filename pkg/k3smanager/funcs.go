@@ -14,32 +14,37 @@
  * limitations under the License.
  */
 
-package common
+package k3smanager
+
+// Add functions from Helm that don't exist in Sprig
+// @link https://github.com/helm/helm/blob/main/pkg/engine/funcs.go
 
 import (
-	"fmt"
-	"math"
 	"strings"
+	"text/template"
 
-	"github.com/google/uuid"
+	"sigs.k8s.io/yaml"
 )
 
-func AppendRandomString(str string, length float64) string {
-	return fmt.Sprintf("%s-%s", str, RandomString(length))
+var helmFuncs = template.FuncMap{
+	"fromYaml": fromYAML,
+	"toYaml":   toYAML,
 }
 
-func Ptr[T any](p T) *T {
-	return &p
-}
+func fromYAML(str string) map[string]interface{} {
+	m := map[string]interface{}{}
 
-func RandomString(length float64) string {
-	// UUIDs are 32 characters long - work out how many we need to generate
-	gens := math.Ceil(length / 32)
-
-	var rand string
-	for i := 0; i < int(gens); i++ {
-		rand += strings.Replace(uuid.New().String(), "-", "", -1)
+	if err := yaml.Unmarshal([]byte(str), &m); err != nil {
+		m["Error"] = err.Error()
 	}
+	return m
+}
 
-	return rand[0:int(length)]
+func toYAML(v interface{}) string {
+	data, err := yaml.Marshal(v)
+	if err != nil {
+		// Swallow errors inside of a template.
+		return ""
+	}
+	return strings.TrimSuffix(string(data), "\n")
 }
