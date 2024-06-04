@@ -30,4 +30,5 @@ var (
 	}
 	ErrNotOneManagerProvided = errors.New("did not receive one manager to configure")
 	ErrNotManager            = errors.New("node type not a manager")
+	ErrNotConfigured         = errors.New("k3s-manager is not yet configured")
 )
