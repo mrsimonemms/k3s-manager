@@ -18,9 +18,9 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/mrsimonemms/golang-helpers/logger"
+	"github.com/mrsimonemms/k3s-manager/pkg/k3smanager"
 	"github.com/spf13/cobra"
 )
 
@@ -46,19 +46,21 @@ var clusterApplyCmd = &cobra.Command{
 			return err
 		}
 
-		if err := prepare.EnsureK3sManager(ctx, cfg); err != nil {
+		if err := prepare.EnsureK3s(ctx, cfg); err != nil {
 			logger.Log().WithError(err).Error("Error ensuring K3s manager")
 			return err
 		}
 
-		s, err := prepare.GetK3sAccessSecrets()
+		secrets, err := prepare.GetK3sAccessSecrets()
 		if err != nil {
+			logger.Log().WithError(err).Error("Error getting k3s access secrets")
 			return err
 		}
-		fmt.Println("kube")
-		fmt.Println(string(s.Kubeconfig))
-		fmt.Println("token")
-		fmt.Println(string(s.JoinToken))
+
+		if err := k3smanager.Apply(ctx, cfg, secrets); err != nil {
+			logger.Log().WithError(err).Error("Error applying k3smanager")
+			return err
+		}
 
 		return nil
 	},
