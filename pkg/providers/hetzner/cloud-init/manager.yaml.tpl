@@ -5,30 +5,9 @@ package_update: true
 package_upgrade: true
 packages:
   - curl
-# @todo(sje): figure out why changing the port isn't working
-# bootcmd:
-#   # Set SSH port
-#   - |
-#     if grep -q "^Port 22$" /etc/ssh/sshd_config; then
-#       sed -i "s/Port 22/Port {{ .SSHPort }}/" /etc/ssh/sshd_config
-#     else
-#       echo "Port {{ .SSHPort }}" >> /etc/ssh/sshd_config
-#     fi
-#   - service ssh restart
 runcmd:
-  # Prevent login with root user
-  - [
-      sed,
-      -i,
-      -e,
-      "s/^PermitRootLogin yes/PermitRootLogin no/",
-      "/etc/ssh/sshd_config",
-    ]
   - [service, sshd, restart]
   - [rm, -f, /root/.ssh/authorized_keys]
-  # Secure UFW
-  - ufw allow ssh
-  - ufw enable
   - chown {{ .User }}:{{ .User }} "/home/{{ .User }}"
 timezone: UTC
 users:
@@ -40,3 +19,9 @@ users:
     shell: /bin/bash
     ssh_authorized_keys:
       - "{{ .PublicKey }}"
+write_files:
+  - path: /etc/ssh/sshd_config.d/ssh.conf
+    content: |
+      PasswordAuthentication no
+      PermitRootLogin no
+      Port {{ .SSHPort }}
