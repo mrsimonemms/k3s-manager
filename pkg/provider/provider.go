@@ -16,7 +16,14 @@
 
 package provider
 
-import "github.com/mrsimonemms/k3s-manager/pkg/config"
+import (
+	"context"
+	"time"
+
+	"github.com/mrsimonemms/golang-helpers/logger"
+	"github.com/mrsimonemms/k3s-manager/pkg/config"
+	"github.com/mrsimonemms/k3s-manager/pkg/k3s"
+)
 
 type Factory func(*config.Config) (Provider, error)
 
@@ -42,4 +49,77 @@ func Register(name string, provider Factory) error {
 	}
 
 	return ErrProviderExists(name)
+}
+
+func ensureOneManager(managers []Node) (*Node, error) {
+	// @todo(sje): find a nicer way of handling multiple managers
+	if len(managers) != 1 {
+		return nil, ErrNotOneManagerProvided
+	}
+
+	return &managers[0], nil
+}
+
+// EnsureK3s applies K3s to the specified manager clusters to the given configuration
+func EnsureK3s(ctx context.Context, cfg *config.Config, managers []Node, kubeconfigHost string) error {
+	manager, err := ensureOneManager(managers)
+	if err != nil {
+		return err
+	}
+
+	logger.Log().Info("Waiting for manager to become ready")
+	if err := manager.SSH.WaitUntilCloudInitReady(ctx); err != nil {
+		return err
+	}
+	logger.Log().Info("Manager ready")
+
+	command := k3s.K3s{
+		IsAgent:    false,
+		JoinToken:  nil, // Initial manager
+		NodeLabels: cfg.ManagerPool.Labels,
+		NodeTaints: cfg.ManagerPool.Taints,
+		TLSSANs:    []string{kubeconfigHost},
+
+		K3sVersion: "", // @todo(sje): add version
+	}
+
+	logger.Log().Info("Installing K3s")
+	_, stderr, _, err := manager.SSH.Run(command.GenerateInstallCommand(), time.Minute*5)
+	if err != nil {
+		logger.Log().WithError(err).WithField("stderr", stderr).Error("Error executing k3s install script")
+		return err
+	}
+
+	logger.Log().Debug("Ensuring k3s is started")
+	_, stderr, _, err = manager.SSH.Run("sudo systemctl start k3s", time.Minute*5)
+	if err != nil {
+		logger.Log().WithError(err).WithField("stderr", stderr).Error("Error executing k3s install script")
+		return err
+	}
+
+	logger.Log().Info("K3s is installed to the manager node")
+
+	return nil
+}
+
+func GetK3sAccessSecrets(managers []Node, kubeconfigHost string) (*K3sAccessSecrets, error) {
+	manager, err := ensureOneManager(managers)
+	if err != nil {
+		return nil, err
+	}
+
+	kubeconfig, err := manager.GetKubeconfig(kubeconfigHost)
+	if err != nil {
+		return nil, err
+	}
+
+	joinToken, err := manager.GetJoinToken()
+	if err != nil {
+		return nil, err
+	}
+
+	return &K3sAccessSecrets{
+		JoinToken:  joinToken,
+		Kubeconfig: kubeconfig,
+	}, nil
 }

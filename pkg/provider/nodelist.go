@@ -17,17 +17,13 @@
 package provider
 
 import (
-	"errors"
-	"fmt"
+	"github.com/mrsimonemms/k3s-manager/pkg/common"
 )
 
-var (
-	ErrProviderExists = func(name string) error {
-		return fmt.Errorf("provider already exists: %s", name)
-	}
-	ErrUnknownProvider = func(name string) error {
-		return fmt.Errorf("unknown provider: %s", name)
-	}
-	ErrNotOneManagerProvided = errors.New("did not receive one manager to configure")
-	ErrNotManager            = errors.New("node type not a manager")
-)
+type NodeListRequest struct {
+	Type common.NodeType // If set, only return the given machine type, otherwise return everything
+}
+
+type NodeListResponse struct {
+	Machines []Node
+}

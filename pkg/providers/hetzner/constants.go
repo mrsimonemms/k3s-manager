@@ -28,6 +28,13 @@ const (
 	DefaultArch  = string(hcloud.ArchitectureX86)
 )
 
+type LabelKey string
+
+const (
+	LabelKeyCluster LabelKey = "cluster"
+	LabelKeyType    LabelKey = "type"
+)
+
 var ErrMultipleCandidates = func(resource string) error {
 	return fmt.Errorf("multiple %s resources exist", resource)
 }

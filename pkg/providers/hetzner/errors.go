@@ -24,3 +24,5 @@ var (
 	ErrUnknownLocation   = errors.New("unknown server location")
 	ErrUnknownServerType = errors.New("unknown server type")
 )
+
+var errNotImplemented = errors.New("command not yet implemented")
