@@ -656,6 +656,11 @@ func (h *Hetzner) listNodes(ctx context.Context, opts *provider.NodeListRequest)
 		generateLabelKey(LabelKeyCluster): h.cfg.Name,
 	}
 
+	// Let's do a bit of defensive coding
+	if opts == nil {
+		opts = &provider.NodeListRequest{}
+	}
+
 	if opts.Type == common.NodeTypeManager {
 		labels[generateLabelKey(LabelKeyType)] = string(common.NodeTypeManager)
 	} else if opts.Type == common.NodeTypeWorker {

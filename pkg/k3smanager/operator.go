@@ -16,10 +16,31 @@
 
 package k3smanager
 
-import "errors"
+import (
+	"context"
+	"errors"
+	"fmt"
 
-func Check() error {
-	return errors.New("command not yet implemented")
+	"github.com/mrsimonemms/golang-helpers/logger"
+	"github.com/mrsimonemms/k3s-manager/pkg/config"
+	"github.com/mrsimonemms/k3s-manager/pkg/provider"
+)
+
+func Check(ctx context.Context, cfg *config.Config, p provider.Provider) error {
+	logger.Log().Info("List nodes")
+	nodeList, err := p.NodeList(ctx, &provider.NodeListRequest{})
+	if err != nil {
+		logger.Log().WithError(err).Error("Error listing nodes")
+		return err
+	}
+
+	// @todo(sje): check manager nodes
+	fmt.Printf("%+v\n", nodeList)
+	for _, n := range cfg.WorkerPools {
+		fmt.Printf("%+v\n", n.Count)
+	}
+
+	return nil
 }
 
 func Watch() error {
