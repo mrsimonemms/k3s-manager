@@ -60,7 +60,7 @@ func escapeLabels(labels map[string]string) map[string]string {
 	return escaped
 }
 
-func generateLabelKey(key string) string {
+func generateLabelKey(key LabelKey) string {
 	return fmt.Sprintf("%s/%s", common.Namespace, key)
 }
 

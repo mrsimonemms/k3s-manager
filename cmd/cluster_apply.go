@@ -21,6 +21,7 @@ import (
 
 	"github.com/mrsimonemms/golang-helpers/logger"
 	"github.com/mrsimonemms/k3s-manager/pkg/k3smanager"
+	"github.com/mrsimonemms/k3s-manager/pkg/provider"
 	"github.com/spf13/cobra"
 )
 
@@ -46,12 +47,17 @@ var clusterApplyCmd = &cobra.Command{
 			return err
 		}
 
-		if err := prepare.EnsureK3s(ctx, cfg); err != nil {
+		kubeconfigHost, err := p.ManagerAddress(ctx)
+		if err != nil {
+			return err
+		}
+
+		if err := provider.EnsureK3s(ctx, cfg, prepare.Managers, kubeconfigHost.Address); err != nil {
 			logger.Log().WithError(err).Error("Error ensuring K3s manager")
 			return err
 		}
 
-		secrets, err := prepare.GetK3sAccessSecrets()
+		secrets, err := provider.GetK3sAccessSecrets(prepare.Managers, kubeconfigHost.Address)
 		if err != nil {
 			logger.Log().WithError(err).Error("Error getting k3s access secrets")
 			return err

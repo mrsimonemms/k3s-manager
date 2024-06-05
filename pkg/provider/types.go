@@ -52,8 +52,10 @@ type Provider interface {
 	// Nodes are the servers in the cluster. They can be managers or
 	// workers and may be manually or automatically scaled. At it's
 	// smallest, there must be at least one manager node.
+	ManagerAddress(context.Context) (*ManagerAddressResponse, error)
 	NodeCreate(context.Context) (*NodeCreateResponse, error)
 	NodeDelete(context.Context) (*NodeDeleteResponse, error)
+	NodeList(context.Context, *NodeListRequest) (*NodeListResponse, error)
 
 	// Prepare
 	//
@@ -73,6 +75,10 @@ type DatastoreDeleteResponse struct{}
 type LoadBalancerCreateResponse struct{}
 
 type LoadBalancerDeleteResponse struct{}
+
+type ManagerAddressResponse struct {
+	Address string
+}
 
 type NodeCreateResponse struct{}
 

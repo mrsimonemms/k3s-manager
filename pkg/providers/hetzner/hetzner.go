@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	_ "embed"
-	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -31,6 +30,7 @@ import (
 	"github.com/appleboy/easyssh-proxy"
 	"github.com/go-playground/validator/v10"
 	"github.com/hetznercloud/hcloud-go/v2/hcloud"
+	"github.com/mrsimonemms/golang-helpers/logger"
 	"github.com/mrsimonemms/k3s-manager/pkg/common"
 	"github.com/mrsimonemms/k3s-manager/pkg/config"
 	"github.com/mrsimonemms/k3s-manager/pkg/provider"
@@ -44,6 +44,12 @@ var cloudInitManager []byte
 type Config struct {
 	Token string `validate:"required"`
 	SSHKey
+}
+
+type server struct {
+	Type    common.NodeType
+	Machine *hcloud.Server
+	Node    provider.Node
 }
 
 type SSHKey struct {
@@ -82,8 +88,6 @@ type Hetzner struct {
 	logger      *logrus.Entry
 }
 
-var errNotImplemented = errors.New("command not yet implemented")
-
 func (h *Hetzner) ApplyCSI(context.Context) (*provider.ApplyCSIResponse, error) {
 	return nil, errNotImplemented
 }
@@ -104,6 +108,26 @@ func (h *Hetzner) LoadBalancerDelete(context.Context) (*provider.LoadBalancerDel
 	return nil, errNotImplemented
 }
 
+func (h *Hetzner) ManagerAddress(ctx context.Context) (*provider.ManagerAddressResponse, error) {
+	servers, err := h.listNodes(ctx, &provider.NodeListRequest{Type: common.NodeTypeManager})
+	if err != nil {
+		return nil, err
+	}
+
+	serverCount := len(servers)
+	if serverCount == 0 {
+		return nil, provider.ErrNotConfigured
+	} else if serverCount == 1 {
+		server := servers[0]
+
+		return &provider.ManagerAddressResponse{
+			Address: server.Machine.PublicNet.IPv4.IP.String(),
+		}, nil
+	}
+
+	return nil, errNotImplemented
+}
+
 func (h *Hetzner) NodeCreate(context.Context) (*provider.NodeCreateResponse, error) {
 	return nil, errNotImplemented
 }
@@ -112,9 +136,25 @@ func (h *Hetzner) NodeDelete(context.Context) (*provider.NodeDeleteResponse, err
 	return nil, errNotImplemented
 }
 
+func (h *Hetzner) NodeList(ctx context.Context, opts *provider.NodeListRequest) (*provider.NodeListResponse, error) {
+	servers, err := h.listNodes(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	machines := make([]provider.Node, 0)
+	for _, s := range servers {
+		machines = append(machines, s.Node)
+	}
+
+	return &provider.NodeListResponse{
+		Machines: machines,
+	}, nil
+}
+
 func (h *Hetzner) Prepare(ctx context.Context) (*provider.PrepareResponse, error) {
 	labels := labelSelector{
-		generateLabelKey("cluster"): h.cfg.Name,
+		generateLabelKey(LabelKeyCluster): h.cfg.Name,
 	}
 
 	// Ensure network
@@ -141,7 +181,7 @@ func (h *Hetzner) Prepare(ctx context.Context) (*provider.PrepareResponse, error
 	}
 
 	// Add the manager type to the labels
-	labels[generateLabelKey("type")] = string(common.NodeTypeManager)
+	labels[generateLabelKey(LabelKeyType)] = string(common.NodeTypeManager)
 	if err := labels.Validate(); err != nil {
 		return nil, err
 	}
@@ -153,7 +193,6 @@ func (h *Hetzner) Prepare(ctx context.Context) (*provider.PrepareResponse, error
 	}
 
 	// Ensure manager load balancer if multiple manager nodes
-	var kubeconfigHost string
 	if h.cfg.Cluster.ManagerPool.Count > 1 {
 		// Add the load balancer IP in the TLS SANs
 		return nil, errNotImplemented
@@ -162,26 +201,14 @@ func (h *Hetzner) Prepare(ctx context.Context) (*provider.PrepareResponse, error
 		// }
 	}
 
-	managerList := make([]provider.PrepareResponseServer, 0)
+	managerList := make([]provider.Node, 0)
 
 	for _, s := range managers {
-		managerList = append(managerList, provider.PrepareResponseServer{
-			SSH: ssh.New(easyssh.MakeConfig{
-				User:    common.MachineUser,
-				Server:  s.PublicNet.IPv4.IP.String(),
-				Port:    strconv.Itoa(h.cfg.Networking.SSHPort),
-				Key:     string(h.providerCfg.privateContent),
-				Timeout: 10 * time.Second,
-			}),
-		})
-
-		// Add manager's IP to the TLS SANs
-		kubeconfigHost = s.PublicNet.IPv4.IP.String()
+		managerList = append(managerList, s.Node)
 	}
 
 	return &provider.PrepareResponse{
-		Managers:       managerList,
-		KubeconfigHost: kubeconfigHost,
+		Managers: managerList,
 	}, nil
 }
 
@@ -289,18 +316,13 @@ func (h *Hetzner) CreateServer(ctx context.Context, name string, nodeConfig conf
 	return result.Server, nil
 }
 
-func (h *Hetzner) ensureManagerServer(ctx context.Context, labels labelSelector, sshKey *hcloud.SSHKey, placementGroup *hcloud.PlacementGroup, network *hcloud.Network) ([]*hcloud.Server, error) {
+func (h *Hetzner) ensureManagerServer(ctx context.Context, labels labelSelector, sshKey *hcloud.SSHKey, placementGroup *hcloud.PlacementGroup, network *hcloud.Network) ([]server, error) {
 	l := h.logger.WithField("labels", labels)
 
 	// Don't use the upsert workflow as may be multiple servers
 	l.Info("Ensuring manager server exists")
-	servers, _, err := h.client.Server.List(ctx, hcloud.ServerListOpts{
-		ListOpts: hcloud.ListOpts{
-			LabelSelector: labels.String(),
-		},
-	})
+	servers, err := h.listNodes(ctx, &provider.NodeListRequest{Type: common.NodeTypeManager})
 	if err != nil {
-		l.WithError(err).Error("Error listing servers")
 		return nil, err
 	}
 
@@ -308,13 +330,28 @@ func (h *Hetzner) ensureManagerServer(ctx context.Context, labels labelSelector,
 	l.WithField("count", serverCount).Debug("Number of servers found")
 
 	if serverCount == 0 {
-		server, err := h.CreateServer(ctx, fmt.Sprintf("%s-%s-%d", h.cfg.Name, h.cfg.ManagerPool.Name, 0), h.cfg.ManagerPool, labels, sshKey, placementGroup, common.NodeTypeManager, network)
+		s, err := h.CreateServer(ctx, fmt.Sprintf("%s-%s-%d", h.cfg.Name, h.cfg.ManagerPool.Name, 0), h.cfg.ManagerPool, labels, sshKey, placementGroup, common.NodeTypeManager, network)
 		if err != nil {
 			return nil, err
 		}
 
-		return []*hcloud.Server{
-			server,
+		return []server{
+			{
+				Type:    common.NodeTypeManager,
+				Machine: s,
+				Node: provider.NewNode(
+					s.Name,
+					s.PublicNet.IPv4.IP.String(),
+					common.NodeTypeManager,
+					ssh.New(easyssh.MakeConfig{
+						User:    common.MachineUser,
+						Server:  s.PublicNet.IPv4.IP.String(),
+						Port:    strconv.Itoa(h.cfg.Networking.SSHPort),
+						Key:     string(h.providerCfg.privateContent),
+						Timeout: 10 * time.Second,
+					}),
+				),
+			},
 		}, nil
 	}
 
@@ -609,6 +646,57 @@ func (h *Hetzner) ensureNetwork(ctx context.Context, labels labelSelector) (*hcl
 			return network, nil
 		},
 	}.exec(ctx)
+}
+
+func (h *Hetzner) listNodes(ctx context.Context, opts *provider.NodeListRequest) ([]server, error) {
+	labels := labelSelector{
+		generateLabelKey(LabelKeyCluster): h.cfg.Name,
+	}
+
+	if opts.Type == common.NodeTypeManager {
+		labels[generateLabelKey(LabelKeyType)] = string(common.NodeTypeManager)
+	} else if opts.Type == common.NodeTypeWorker {
+		labels[generateLabelKey(LabelKeyType)] = string(common.NodeTypeWorker)
+	}
+
+	l := logger.Log().WithField("labels", labels)
+
+	servers, _, err := h.client.Server.List(ctx, hcloud.ServerListOpts{
+		ListOpts: hcloud.ListOpts{
+			LabelSelector: labels.String(),
+		},
+	})
+	if err != nil {
+		l.WithError(err).Error("Error listing servers")
+		return nil, err
+	}
+
+	serverList := make([]server, 0)
+	for _, s := range servers {
+		out := server{
+			Machine: s,
+			Node: provider.NewNode(
+				s.Name,
+				s.PublicNet.IPv4.IP.String(),
+				common.NodeTypeManager,
+				ssh.New(easyssh.MakeConfig{
+					User:    common.MachineUser,
+					Server:  s.PublicNet.IPv4.IP.String(),
+					Port:    strconv.Itoa(h.cfg.Networking.SSHPort),
+					Key:     string(h.providerCfg.privateContent),
+					Timeout: 10 * time.Second,
+				}),
+			),
+		}
+
+		if machineType, ok := s.Labels[generateLabelKey(LabelKeyType)]; ok {
+			out.Type = common.NodeType(machineType)
+		}
+
+		serverList = append(serverList, out)
+	}
+
+	return serverList, nil
 }
 
 // waitForActionCompletion if a command returns an *hcloud.Action struct, this is a long-running job on the Hetzner side.
