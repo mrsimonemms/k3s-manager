@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 
 	"github.com/mrsimonemms/golang-helpers/logger"
@@ -97,6 +98,9 @@ var clusterKubeconfigCmd = &cobra.Command{
 func init() {
 	clusterCmd.AddCommand(clusterKubeconfigCmd)
 
-	bindEnv("output", "-")
-	clusterKubeconfigCmd.Flags().StringVarP(&clusterKubeconfigOpts.Output, "output", "o", viper.GetString("output"), `Location to output the kubeconfig. To sent to stdout, set to "-" `)
+	homedir, err := os.UserHomeDir()
+	cobra.CheckErr(err)
+
+	bindEnv("output", path.Join(homedir, ".kube", "config"))
+	clusterKubeconfigCmd.Flags().StringVarP(&clusterKubeconfigOpts.Output, "output", "o", viper.GetString("output"), `Location to output the kubeconfig. To send to stdout, set to "-" `)
 }
