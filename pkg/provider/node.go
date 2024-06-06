@@ -27,6 +27,8 @@ type Node struct {
 	Type    common.NodeType
 	Address string
 	SSH     ssh.SSH // This allows direct connection with the machine
+	Count   *int    // Use pointer to ensure values are set
+	Pool    *string // Only populated for worker nodes
 }
 
 func (n *Node) GetKubeconfig(kubeconfigHost string) ([]byte, error) {
@@ -45,11 +47,16 @@ func (n *Node) GetJoinToken() ([]byte, error) {
 	return k3s.GetJoinToken(n.SSH)
 }
 
-func NewNode(name, address string, machineType common.NodeType, ssh ssh.SSH) Node {
+func NewNode(name, address string, machineType common.NodeType, ssh ssh.SSH, count *int, pool *string) Node {
+	if machineType != common.NodeTypeWorker {
+		pool = nil
+	}
 	return Node{
 		Name:    name,
 		Address: address,
 		Type:    machineType,
+		Count:   count,
+		Pool:    pool,
 		SSH:     ssh,
 	}
 }

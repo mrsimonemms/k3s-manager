@@ -330,6 +330,7 @@ func (h *Hetzner) ensureManagerServer(ctx context.Context, labels labelSelector,
 	l.WithField("count", serverCount).Debug("Number of servers found")
 
 	if serverCount == 0 {
+		labels[generateLabelKey(LabelKeyCount)] = "0"
 		s, err := h.CreateServer(ctx, fmt.Sprintf("%s-%s-%d", h.cfg.Name, h.cfg.ManagerPool.Name, 0), h.cfg.ManagerPool, labels, sshKey, placementGroup, common.NodeTypeManager, network)
 		if err != nil {
 			return nil, err
@@ -350,6 +351,8 @@ func (h *Hetzner) ensureManagerServer(ctx context.Context, labels labelSelector,
 						Key:     string(h.providerCfg.privateContent),
 						Timeout: 10 * time.Second,
 					}),
+					common.Ptr(0),
+					nil,
 				),
 			},
 		}, nil
@@ -673,6 +676,18 @@ func (h *Hetzner) listNodes(ctx context.Context, opts *provider.NodeListRequest)
 
 	serverList := make([]server, 0)
 	for _, s := range servers {
+		var count *int
+		if countStr, ok := s.Labels[generateLabelKey(LabelKeyCount)]; ok {
+			countI, err := strconv.Atoi(countStr)
+			if err == nil {
+				count = &countI
+			}
+		}
+		var pool *string
+		if poolStr, ok := s.Labels[generateLabelKey(LabelKeyPool)]; ok {
+			pool = &poolStr
+		}
+
 		out := server{
 			Machine: s,
 			Node: provider.NewNode(
@@ -686,6 +701,8 @@ func (h *Hetzner) listNodes(ctx context.Context, opts *provider.NodeListRequest)
 					Key:     string(h.providerCfg.privateContent),
 					Timeout: 10 * time.Second,
 				}),
+				count,
+				pool,
 			),
 		}
 

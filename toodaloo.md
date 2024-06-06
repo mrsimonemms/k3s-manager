@@ -6,4 +6,4 @@
 | --- | --- | --- | --- |
 | [pkg/config/types.go](pkg/config/types.go#L43) | 43 | Simon Emms <simon@simonemms.com> | envPrefix not yet supported for slices |
 | [pkg/provider/provider.go](pkg/provider/provider.go#L55) | 55 | Simon Emms <simon@simonemms.com> | find a nicer way of handling multiple managers |
-| [pkg/providers/hetzner/hetzner.go](pkg/providers/hetzner/hetzner.go#L645) | 645 | Simon Emms <simon@simonemms.com> | handle changes to the network subnet |
+| [pkg/providers/hetzner/hetzner.go](pkg/providers/hetzner/hetzner.go#L648) | 648 | Simon Emms <simon@simonemms.com> | handle changes to the network subnet |
