@@ -33,6 +33,8 @@ type LabelKey string
 const (
 	LabelKeyCluster LabelKey = "cluster"
 	LabelKeyType    LabelKey = "type"
+	LabelKeyPool    LabelKey = "pool"
+	LabelKeyCount   LabelKey = "count"
 )
 
 var ErrMultipleCandidates = func(resource string) error {

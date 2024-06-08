@@ -331,6 +331,8 @@ func (h *Hetzner) ensureManagerServer(ctx context.Context, labels labelSelector,
 	l.WithField("count", serverCount).Debug("Number of servers found")
 
 	if serverCount == 0 {
+		labels[generateLabelKey(LabelKeyCount)] = "0"
+
 		s, err := h.CreateServer(ctx, provider.GenerateNodeName(h.cfg.Name, h.cfg.ManagerPool.Name, 0), h.cfg.ManagerPool, labels, sshKey, placementGroup, common.NodeTypeManager, network)
 		if err != nil {
 			return nil, err
@@ -344,6 +346,8 @@ func (h *Hetzner) ensureManagerServer(ctx context.Context, labels labelSelector,
 					s.Name,
 					s.PublicNet.IPv4.IP.String(),
 					common.NodeTypeManager,
+					common.Ptr(0),
+					nil,
 					ssh.New(easyssh.MakeConfig{
 						User:       common.MachineUser,
 						Server:     s.PublicNet.IPv4.IP.String(),
@@ -352,6 +356,12 @@ func (h *Hetzner) ensureManagerServer(ctx context.Context, labels labelSelector,
 						Key:        string(h.providerCfg.privateContent),
 						Timeout:    10 * time.Second,
 					}),
+					provider.ProviderOpts{
+						Location:    s.Datacenter.Name,
+						MachineType: s.ServerType.Name,
+						Arch:        string(s.Image.Architecture),
+						Image:       s.Image.Name,
+					},
 				),
 			},
 		}, nil
@@ -655,6 +665,11 @@ func (h *Hetzner) listNodes(ctx context.Context, opts *provider.NodeListRequest)
 		generateLabelKey(LabelKeyCluster): h.cfg.Name,
 	}
 
+	// Let's do a bit of defensive coding
+	if opts == nil {
+		opts = &provider.NodeListRequest{}
+	}
+
 	if opts.Type == common.NodeTypeManager {
 		labels[generateLabelKey(LabelKeyType)] = string(common.NodeTypeManager)
 	} else if opts.Type == common.NodeTypeWorker {
@@ -675,12 +690,31 @@ func (h *Hetzner) listNodes(ctx context.Context, opts *provider.NodeListRequest)
 
 	serverList := make([]server, 0)
 	for _, s := range servers {
+		var count *int
+		if c, ok := s.Labels[generateLabelKey(LabelKeyCount)]; ok {
+			countI, err := strconv.Atoi(c)
+			if err == nil {
+				count = &countI
+			}
+		}
+		var poolName *string
+		if p, ok := s.Labels[generateLabelKey(LabelKeyPool)]; ok {
+			poolName = &p
+		}
+		var machineType common.NodeType
+		if t, ok := s.Labels[generateLabelKey(LabelKeyType)]; ok {
+			machineType = common.NodeType(t)
+		}
+
 		out := server{
 			Machine: s,
+			Type:    machineType,
 			Node: provider.NewNode(
 				s.Name,
 				s.PublicNet.IPv4.IP.String(),
 				common.NodeTypeManager,
+				count,
+				poolName,
 				ssh.New(easyssh.MakeConfig{
 					User:       common.MachineUser,
 					Server:     s.PublicNet.IPv4.IP.String(),
@@ -689,11 +723,13 @@ func (h *Hetzner) listNodes(ctx context.Context, opts *provider.NodeListRequest)
 					Passphrase: h.providerCfg.Passphase,
 					Timeout:    10 * time.Second,
 				}),
+				provider.ProviderOpts{
+					Location:    s.Datacenter.Name,
+					MachineType: s.ServerType.Name,
+					Arch:        string(s.Image.Architecture),
+					Image:       s.Image.Name,
+				},
 			),
-		}
-
-		if machineType, ok := s.Labels[generateLabelKey(LabelKeyType)]; ok {
-			out.Type = common.NodeType(machineType)
 		}
 
 		serverList = append(serverList, out)

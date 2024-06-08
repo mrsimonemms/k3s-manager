@@ -24,15 +24,30 @@ import (
 	"github.com/mrsimonemms/k3s-manager/pkg/ssh"
 )
 
+// This is used to normalise the identification of a node and it's parameters.
+// Typically, this data will either be known to the provider or will be taken
+// from labels/tags set to the node.
 type Node struct {
-	Name    string
-	Type    common.NodeType
-	Address string
-	SSH     ssh.SSH // This allows direct connection with the machine
+	Name     string
+	NodeType common.NodeType
+	Address  string
+	SSH      ssh.SSH // This allows direct connection with the machine
+
+	PoolName *string // Only populated for worker nodes
+	Count    *int    // Use a pointer to ensure values are set
+
+	ProviderOpts // All values are decided by the provider
+}
+
+type ProviderOpts struct {
+	Location    string
+	MachineType string
+	Arch        string
+	Image       string
 }
 
 func (n *Node) GetKubeconfig(kubeconfigHost string) ([]byte, error) {
-	if n.Type != common.NodeTypeManager {
+	if n.NodeType != common.NodeTypeManager {
 		return nil, ErrNotManager
 	}
 
@@ -40,19 +55,48 @@ func (n *Node) GetKubeconfig(kubeconfigHost string) ([]byte, error) {
 }
 
 func (n *Node) GetJoinToken() ([]byte, error) {
-	if n.Type != common.NodeTypeManager {
+	if n.NodeType != common.NodeTypeManager {
 		return nil, ErrNotManager
 	}
 
 	return k3s.GetJoinToken(n.SSH)
 }
 
-func NewNode(name, address string, machineType common.NodeType, ssh ssh.SSH) Node {
+// Do the parameters that matter match?
+func (n *Node) Matches(node *Node) bool {
+	if n.Name != node.Name {
+		return false
+	}
+	if n.NodeType != node.NodeType {
+		return false
+	}
+	if n.PoolName != node.PoolName {
+		return false
+	}
+	if n.Count != node.Count {
+		return false
+	}
+	if n.ProviderOpts != node.ProviderOpts {
+		return false
+	}
+
+	// Everything we care about matches - bingo bango!
+	return true
+}
+
+func NewNode(name, address string, nodeType common.NodeType, count *int, poolName *string, ssh ssh.SSH, providerOpts ProviderOpts) Node {
+	if nodeType != common.NodeTypeWorker {
+		poolName = nil
+	}
+
 	return Node{
-		Name:    name,
-		Address: address,
-		Type:    machineType,
-		SSH:     ssh,
+		Name:         name,
+		Address:      address,
+		NodeType:     nodeType,
+		PoolName:     poolName,
+		Count:        count,
+		SSH:          ssh,
+		ProviderOpts: providerOpts,
 	}
 }
 
