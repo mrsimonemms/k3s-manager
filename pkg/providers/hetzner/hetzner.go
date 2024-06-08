@@ -330,7 +330,7 @@ func (h *Hetzner) ensureManagerServer(ctx context.Context, labels labelSelector,
 	l.WithField("count", serverCount).Debug("Number of servers found")
 
 	if serverCount == 0 {
-		s, err := h.CreateServer(ctx, fmt.Sprintf("%s-%s-%d", h.cfg.Name, h.cfg.ManagerPool.Name, 0), h.cfg.ManagerPool, labels, sshKey, placementGroup, common.NodeTypeManager, network)
+		s, err := h.CreateServer(ctx, provider.GenerateNodeName(h.cfg.Name, h.cfg.ManagerPool.Name, 0), h.cfg.ManagerPool, labels, sshKey, placementGroup, common.NodeTypeManager, network)
 		if err != nil {
 			return nil, err
 		}

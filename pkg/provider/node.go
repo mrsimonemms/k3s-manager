@@ -17,6 +17,8 @@
 package provider
 
 import (
+	"fmt"
+
 	"github.com/mrsimonemms/k3s-manager/pkg/common"
 	"github.com/mrsimonemms/k3s-manager/pkg/k3s"
 	"github.com/mrsimonemms/k3s-manager/pkg/ssh"
@@ -52,4 +54,8 @@ func NewNode(name, address string, machineType common.NodeType, ssh ssh.SSH) Nod
 		Type:    machineType,
 		SSH:     ssh,
 	}
+}
+
+func GenerateNodeName(clusterName, poolName string, count int) string {
+	return fmt.Sprintf("%s-%s-%d", clusterName, poolName, count)
 }
