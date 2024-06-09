@@ -17,6 +17,8 @@
 package cmd
 
 import (
+	"context"
+
 	"github.com/mrsimonemms/k3s-manager/pkg/k3smanager"
 	"github.com/spf13/cobra"
 )
@@ -29,7 +31,14 @@ var clusterCheckCmd = &cobra.Command{
 be run from either inside or outside the cluster, but it
 will not watch for changes over time.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return k3smanager.Check()
+		cfg, p, err := loadConfigFile()
+		if err != nil {
+			return err
+		}
+
+		ctx := context.Background()
+
+		return k3smanager.Check(ctx, cfg, p)
 	},
 }
 
