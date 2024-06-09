@@ -57,6 +57,7 @@ type SSHKey struct {
 	publicContent  []byte
 	Private        string `validate:"required,file"`
 	privateContent []byte
+	Passphase      string
 }
 
 func (c *Config) load() error {
@@ -344,11 +345,12 @@ func (h *Hetzner) ensureManagerServer(ctx context.Context, labels labelSelector,
 					s.PublicNet.IPv4.IP.String(),
 					common.NodeTypeManager,
 					ssh.New(easyssh.MakeConfig{
-						User:    common.MachineUser,
-						Server:  s.PublicNet.IPv4.IP.String(),
-						Port:    strconv.Itoa(h.cfg.Networking.SSHPort),
-						Key:     string(h.providerCfg.privateContent),
-						Timeout: 10 * time.Second,
+						User:       common.MachineUser,
+						Server:     s.PublicNet.IPv4.IP.String(),
+						Passphrase: h.providerCfg.Passphase,
+						Port:       strconv.Itoa(h.cfg.Networking.SSHPort),
+						Key:        string(h.providerCfg.privateContent),
+						Timeout:    10 * time.Second,
 					}),
 				),
 			},
@@ -680,11 +682,12 @@ func (h *Hetzner) listNodes(ctx context.Context, opts *provider.NodeListRequest)
 				s.PublicNet.IPv4.IP.String(),
 				common.NodeTypeManager,
 				ssh.New(easyssh.MakeConfig{
-					User:    common.MachineUser,
-					Server:  s.PublicNet.IPv4.IP.String(),
-					Port:    strconv.Itoa(h.cfg.Networking.SSHPort),
-					Key:     string(h.providerCfg.privateContent),
-					Timeout: 10 * time.Second,
+					User:       common.MachineUser,
+					Server:     s.PublicNet.IPv4.IP.String(),
+					Port:       strconv.Itoa(h.cfg.Networking.SSHPort),
+					Key:        string(h.providerCfg.privateContent),
+					Passphrase: h.providerCfg.Passphase,
+					Timeout:    10 * time.Second,
 				}),
 			),
 		}
