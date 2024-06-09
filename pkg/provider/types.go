@@ -18,6 +18,9 @@ package provider
 
 import (
 	"context"
+
+	"github.com/mrsimonemms/k3s-manager/pkg/common"
+	"github.com/mrsimonemms/k3s-manager/pkg/config"
 )
 
 type Provider interface {
@@ -61,7 +64,7 @@ type Provider interface {
 	// workers and may be manually or automatically scaled. At it's
 	// smallest, there must be at least one manager node.
 	ManagerAddress(context.Context) (*ManagerAddressResponse, error)
-	NodeCreate(context.Context) (*NodeCreateResponse, error)
+	NodeCreate(context.Context, *NodeCreateRequest) (*NodeCreateResponse, error)
 	NodeDelete(context.Context) (*NodeDeleteResponse, error)
 	NodeList(context.Context, *NodeListRequest) (*NodeListResponse, error)
 
@@ -72,6 +75,9 @@ type Provider interface {
 	// This must be an idempotent command that ensures these things
 	// exist.
 	Prepare(context.Context) (*PrepareResponse, error)
+
+	// Ensures that any non-required cluster node pool data has provider defaults set
+	SetClusterNodePoolDefaults(config.ClusterNodePool) config.ClusterNodePool
 }
 
 type ApplyCSIResponse struct{}
@@ -88,6 +94,14 @@ type ManagerAddressResponse struct {
 	Address string
 }
 
-type NodeCreateResponse struct{}
+type NodeCreateRequest struct {
+	Count    int
+	Pool     config.ClusterNodePool
+	NodeType common.NodeType
+}
+
+type NodeCreateResponse struct {
+	Node Node
+}
 
 type NodeDeleteResponse struct{}

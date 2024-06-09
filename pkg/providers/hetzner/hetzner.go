@@ -136,8 +136,78 @@ func (h *Hetzner) ManagerAddress(ctx context.Context) (*provider.ManagerAddressR
 	return nil, errNotImplemented
 }
 
-func (h *Hetzner) NodeCreate(context.Context) (*provider.NodeCreateResponse, error) {
-	return nil, errNotImplemented
+func (h *Hetzner) NodeCreate(ctx context.Context, opts *provider.NodeCreateRequest) (*provider.NodeCreateResponse, error) {
+	labels := h.defaultLabels()
+
+	// Ensure default values set
+	opts.Pool = h.SetClusterNodePoolDefaults(opts.Pool)
+
+	l := logger.Log().WithFields(logrus.Fields{
+		"labels":   labels,
+		"nodeType": opts.NodeType,
+		"count":    opts.Count,
+		"poolName": opts.Pool.Name,
+	})
+
+	// Get network
+	l.Debug("Getting network")
+	network, err := h.getNetwork(ctx, labels)
+	if err != nil {
+		l.WithError(err).Error("Error getting network")
+		return nil, err
+	}
+
+	// Get SSH key
+	l.Debug("Getting SSH key")
+	sshKey, err := h.ensureSSHKeys(ctx, labels, false)
+	if err != nil {
+		l.WithError(err).Error("Error ensuring SSH keys")
+		return nil, err
+	}
+
+	// Add additional label info
+	labels[generateLabelKey(LabelKeyType)] = string(opts.NodeType)
+	labels[generateLabelKey(LabelKeyPool)] = opts.Pool.Name
+	if err := labels.Validate(); err != nil {
+		return nil, err
+	}
+	l = logger.Log().WithField("labels", labels)
+
+	// Ensure placement group for pool
+	placementGroup, err := h.ensurePlacementGroup(ctx, labels, opts.Pool.Name)
+	if err != nil {
+		l.WithError(err).Error("Error ensuring placement group")
+		return nil, err
+	}
+
+	// Add pool count to the label
+	labels[generateLabelKey(LabelKeyCount)] = strconv.Itoa(opts.Count)
+	if err := labels.Validate(); err != nil {
+		return nil, err
+	}
+
+	server, err := h.CreateServer(ctx, provider.GenerateNodeName(h.cfg.Name, opts.Pool.Name, opts.Count), opts.Pool, labels, sshKey, placementGroup, opts.NodeType, network)
+	if err != nil {
+		l.WithError(err).Error("Error creating server")
+		return nil, err
+	}
+
+	return &provider.NodeCreateResponse{
+		Node: provider.NewNode(
+			server.Name,
+			server.PublicNet.IPv4.IP.String(),
+			opts.NodeType,
+			&opts.Count,
+			&opts.Pool.Name,
+			h.createServerSSH(server),
+			provider.ProviderOpts{
+				Location:    server.Datacenter.Name,
+				MachineType: server.ServerType.Name,
+				Arch:        string(server.Image.Architecture),
+				Image:       server.Image.Name,
+			},
+		),
+	}, nil
 }
 
 func (h *Hetzner) NodeDelete(context.Context) (*provider.NodeDeleteResponse, error) {
@@ -161,9 +231,7 @@ func (h *Hetzner) NodeList(ctx context.Context, opts *provider.NodeListRequest) 
 }
 
 func (h *Hetzner) Prepare(ctx context.Context) (*provider.PrepareResponse, error) {
-	labels := labelSelector{
-		generateLabelKey(LabelKeyCluster): h.cfg.Name,
-	}
+	labels := h.defaultLabels()
 
 	// Ensure network
 	network, err := h.ensureNetwork(ctx, labels)
@@ -177,13 +245,7 @@ func (h *Hetzner) Prepare(ctx context.Context) (*provider.PrepareResponse, error
 	}
 
 	// Ensure SSH key
-	sshKey, err := h.ensureSSHKeys(ctx, labels)
-	if err != nil {
-		return nil, err
-	}
-
-	// Ensure placement group for managers
-	placementGroup, err := h.ensurePlacementGroup(ctx, labels)
+	sshKey, err := h.ensureSSHKeys(ctx, labels, true)
 	if err != nil {
 		return nil, err
 	}
@@ -191,6 +253,12 @@ func (h *Hetzner) Prepare(ctx context.Context) (*provider.PrepareResponse, error
 	// Add the manager type to the labels
 	labels[generateLabelKey(LabelKeyType)] = string(common.NodeTypeManager)
 	if err := labels.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Ensure placement group for managers
+	placementGroup, err := h.ensurePlacementGroup(ctx, labels, "manager")
+	if err != nil {
 		return nil, err
 	}
 
@@ -220,21 +288,25 @@ func (h *Hetzner) Prepare(ctx context.Context) (*provider.PrepareResponse, error
 	}, nil
 }
 
-func (h *Hetzner) CreateServer(ctx context.Context, name string, nodeConfig config.ClusterNodePool, labels labelSelector, sshKey *hcloud.SSHKey, placementGroup *hcloud.PlacementGroup, nodeType common.NodeType, network *hcloud.Network) (*hcloud.Server, error) {
-	if nodeConfig.Image == nil {
-		nodeConfig.Image = hcloud.Ptr(DefaultImage)
+func (h *Hetzner) SetClusterNodePoolDefaults(c config.ClusterNodePool) config.ClusterNodePool {
+	if c.Image == nil {
+		c.Image = hcloud.Ptr(DefaultImage)
 	}
-	if nodeConfig.Arch == nil {
-		nodeConfig.Arch = hcloud.Ptr(DefaultArch)
+	if c.Arch == nil {
+		c.Arch = hcloud.Ptr(DefaultArch)
 	}
 
+	return c
+}
+
+func (h *Hetzner) CreateServer(ctx context.Context, name string, nodeConfig config.ClusterNodePool, labels labelSelector, sshKey *hcloud.SSHKey, placementGroup *hcloud.PlacementGroup, nodeType common.NodeType, network *hcloud.Network) (*hcloud.Server, error) {
 	l := h.logger.WithFields(logrus.Fields{
 		"name":      name,
 		"type":      nodeConfig.Type,
 		"location":  nodeConfig.Location,
 		"labels":    labels,
-		"image":     nodeConfig.Image,
-		"arch":      nodeConfig.Arch,
+		"image":     *nodeConfig.Image,
+		"arch":      *nodeConfig.Arch,
 		"nodeType":  nodeType,
 		"networkId": network.ID,
 	})
@@ -324,6 +396,23 @@ func (h *Hetzner) CreateServer(ctx context.Context, name string, nodeConfig conf
 	return result.Server, nil
 }
 
+func (h *Hetzner) createServerSSH(server *hcloud.Server) ssh.SSH {
+	return ssh.New(easyssh.MakeConfig{
+		User:       common.MachineUser,
+		Server:     server.PublicNet.IPv4.IP.String(),
+		Passphrase: h.providerCfg.Passphase,
+		Port:       strconv.Itoa(h.cfg.Networking.SSHPort),
+		Key:        string(h.providerCfg.privateContent),
+		Timeout:    10 * time.Second,
+	})
+}
+
+func (h *Hetzner) defaultLabels() labelSelector {
+	return labelSelector{
+		generateLabelKey(LabelKeyCluster): h.cfg.Name,
+	}
+}
+
 func (h *Hetzner) ensureManagerServer(ctx context.Context, labels labelSelector, sshKey *hcloud.SSHKey, placementGroup *hcloud.PlacementGroup, network *hcloud.Network) ([]server, error) {
 	l := h.logger.WithField("labels", labels)
 
@@ -340,6 +429,8 @@ func (h *Hetzner) ensureManagerServer(ctx context.Context, labels labelSelector,
 	if serverCount == 0 {
 		labels[generateLabelKey(LabelKeyCount)] = "0"
 
+		h.cfg.ManagerPool = h.SetClusterNodePoolDefaults(h.cfg.ManagerPool)
+
 		s, err := h.CreateServer(ctx, provider.GenerateNodeName(h.cfg.Name, h.cfg.ManagerPool.Name, 0), h.cfg.ManagerPool, labels, sshKey, placementGroup, common.NodeTypeManager, network)
 		if err != nil {
 			return nil, err
@@ -355,14 +446,7 @@ func (h *Hetzner) ensureManagerServer(ctx context.Context, labels labelSelector,
 					common.NodeTypeManager,
 					common.Ptr(0),
 					nil,
-					ssh.New(easyssh.MakeConfig{
-						User:       common.MachineUser,
-						Server:     s.PublicNet.IPv4.IP.String(),
-						Passphrase: h.providerCfg.Passphase,
-						Port:       strconv.Itoa(h.cfg.Networking.SSHPort),
-						Key:        string(h.providerCfg.privateContent),
-						Timeout:    10 * time.Second,
-					}),
+					h.createServerSSH(s),
 					provider.ProviderOpts{
 						Location:    s.Datacenter.Name,
 						MachineType: s.ServerType.Name,
@@ -377,7 +461,7 @@ func (h *Hetzner) ensureManagerServer(ctx context.Context, labels labelSelector,
 	return servers, nil
 }
 
-func (h *Hetzner) ensureSSHKeys(ctx context.Context, labels labelSelector) (*hcloud.SSHKey, error) {
+func (h *Hetzner) ensureSSHKeys(ctx context.Context, labels labelSelector, uploadIfNotPresent bool) (*hcloud.SSHKey, error) {
 	fingerprint, err := generateSSHKeyFingerprint(string(h.providerCfg.publicContent))
 	if err != nil {
 		return nil, err
@@ -389,6 +473,10 @@ func (h *Hetzner) ensureSSHKeys(ctx context.Context, labels labelSelector) (*hcl
 	}
 
 	if sshKey == nil {
+		if !uploadIfNotPresent {
+			return nil, ErrSSHKeyNotPresent
+		}
+
 		// Upload the key
 		uploadedSSHKey, _, err := h.client.SSHKey.Create(ctx, hcloud.SSHKeyCreateOpts{
 			Name:      common.AppendRandomString(h.cfg.Name, 6),
@@ -406,8 +494,10 @@ func (h *Hetzner) ensureSSHKeys(ctx context.Context, labels labelSelector) (*hcl
 }
 
 // Placement groups ensure that virtual servers run on different physical machines
-func (h *Hetzner) ensurePlacementGroup(ctx context.Context, labels labelSelector) (*hcloud.PlacementGroup, error) {
+func (h *Hetzner) ensurePlacementGroup(ctx context.Context, labels labelSelector, nameSuffix string) (*hcloud.PlacementGroup, error) {
 	l := h.logger.WithField("labels", labels)
+
+	resourceName := fmt.Sprintf("%s-%s", h.cfg.Name, nameSuffix)
 
 	return upsert[hcloud.PlacementGroup]{
 		logger:       l,
@@ -426,7 +516,7 @@ func (h *Hetzner) ensurePlacementGroup(ctx context.Context, labels labelSelector
 		},
 		create: func(ctx context.Context) (*hcloud.PlacementGroup, error) {
 			result, _, err := h.client.PlacementGroup.Create(ctx, hcloud.PlacementGroupCreateOpts{
-				Name:   h.cfg.Name,
+				Name:   resourceName,
 				Labels: labels,
 				Type:   hcloud.PlacementGroupTypeSpread,
 			})
@@ -438,13 +528,11 @@ func (h *Hetzner) ensurePlacementGroup(ctx context.Context, labels labelSelector
 				return nil, err
 			}
 
-			fmt.Println(result.PlacementGroup)
-
 			return result.PlacementGroup, err
 		},
 		update: func(ctx context.Context, pg *hcloud.PlacementGroup) (*hcloud.PlacementGroup, error) {
 			group, _, err := h.client.PlacementGroup.Update(ctx, pg, hcloud.PlacementGroupUpdateOpts{
-				Name:   h.cfg.Name,
+				Name:   resourceName,
 				Labels: labels,
 			})
 
@@ -620,6 +708,19 @@ func (h *Hetzner) ensureFirewall(ctx context.Context, labels labelSelector, netw
 	return firewall, nil
 }
 
+func (h *Hetzner) getNetwork(ctx context.Context, labels labelSelector) (*hcloud.Network, error) {
+	networks, _, err := h.client.Network.List(ctx, hcloud.NetworkListOpts{
+		ListOpts: hcloud.ListOpts{
+			LabelSelector: labels.String(),
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return ensureOnlyOneResource(networks, "network")
+}
+
 func (h *Hetzner) ensureNetwork(ctx context.Context, labels labelSelector) (*hcloud.Network, error) {
 	l := h.logger.WithField("labels", labels)
 
@@ -668,9 +769,7 @@ func (h *Hetzner) ensureNetwork(ctx context.Context, labels labelSelector) (*hcl
 }
 
 func (h *Hetzner) listNodes(ctx context.Context, opts *provider.NodeListRequest) ([]server, error) {
-	labels := labelSelector{
-		generateLabelKey(LabelKeyCluster): h.cfg.Name,
-	}
+	labels := h.defaultLabels()
 
 	// Let's do a bit of defensive coding
 	if opts == nil {

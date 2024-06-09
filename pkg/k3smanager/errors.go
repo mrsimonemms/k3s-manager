@@ -14,27 +14,8 @@
  * limitations under the License.
  */
 
-package hetzner
+package k3smanager
 
-import (
-	"errors"
-	"fmt"
-)
+import "errors"
 
-var (
-	ErrBadSSHKey         = errors.New("bad ssh key")
-	ErrSSHKeyNotPresent  = errors.New("ssh key not present")
-	ErrUnknownImage      = errors.New("unknown server image")
-	ErrUnknownLocation   = errors.New("unknown server location")
-	ErrUnknownServerType = errors.New("unknown server type")
-)
-
-var errNotImplemented = errors.New("command not yet implemented")
-
-func ensureOnlyOneResource[T any](list []*T, name string) (*T, error) {
-	if len(list) == 1 {
-		return list[0], nil
-	}
-
-	return nil, fmt.Errorf("resource %s not configured correctly", name)
-}
+var ErrCannotChangeSingleManagerNode = errors.New("cannot amend a single manager node")
