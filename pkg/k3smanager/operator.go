@@ -104,6 +104,11 @@ func Check(ctx context.Context, cfg *config.Config, p provider.Provider) error {
 		return err
 	}
 
+	kubeconfigHost, err := p.ManagerAddress(ctx)
+	if err != nil {
+		return err
+	}
+
 	updates := nodesToUpdate{}                 // This is what needs to change
 	existing := make(map[string]provider.Node) // This is what currently exists
 
@@ -160,13 +165,22 @@ func Check(ctx context.Context, cfg *config.Config, p provider.Provider) error {
 		})
 
 		l.Info("Creating new node")
-		_, err := p.NodeCreate(ctx, &c.NodeCreateRequest)
+		server, err := p.NodeCreate(ctx, &c.NodeCreateRequest)
 		if err != nil {
 			l.WithError(err).Error("Problem creating new node")
 			return err
 		}
 
-		// @todo(sje): add node to cluster after creating
+		// Add server to cluster
+		l = l.WithFields(logrus.Fields{
+			"nodeName": server.Node.Name,
+			"address":  server.Node.Address,
+		})
+		l.Info("Attaching node to cluster")
+		if err := provider.AttachNodeToCluster(ctx, cfg, server.Node, c.Pool, kubeconfigHost.Address); err != nil {
+			logger.Log().WithError(err).Error("Error attaching server to cluster")
+			return err
+		}
 	}
 
 	return nil

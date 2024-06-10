@@ -18,9 +18,11 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/mrsimonemms/golang-helpers/logger"
+	"github.com/mrsimonemms/k3s-manager/pkg/common"
 	"github.com/mrsimonemms/k3s-manager/pkg/config"
 	"github.com/mrsimonemms/k3s-manager/pkg/k3s"
 )
@@ -58,6 +60,27 @@ func ensureOneManager(managers []Node) (*Node, error) {
 	}
 
 	return &managers[0], nil
+}
+
+func AttachNodeToCluster(ctx context.Context, cfg *config.Config, node Node, pool config.ClusterNodePool, kubeconfigHost string) error {
+	isAgent := false
+	if node.NodeType == common.NodeTypeManager {
+		isAgent = true
+	}
+
+	command := k3s.K3s{
+		IsAgent:    isAgent,
+		JoinToken:  nil, // Initial manager
+		NodeLabels: pool.Labels,
+		NodeTaints: pool.Taints,
+		TLSSANs:    []string{kubeconfigHost},
+
+		K3sVersion: "", // @todo(sje): add version
+	}
+
+	fmt.Println(command)
+
+	return nil
 }
 
 // EnsureK3s applies K3s to the specified manager clusters to the given configuration
