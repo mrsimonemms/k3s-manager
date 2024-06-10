@@ -40,6 +40,14 @@ type Provider interface {
 	DatastoreCreate(context.Context) (*DatastoreCreateResponse, error) // Create the datastore
 	DatastoreDelete(context.Context) (*DatastoreDeleteResponse, error) // Delete the datastore
 
+	// Provider secrets
+	//
+	// Returns any secrets required to make the in-cluster part
+	// of the application work. This could be anything that is
+	// inferred from the provider config section, such as the content
+	// of an SSH key
+	GetProviderSecrets(context.Context) (map[string]string, error)
+
 	// Load balancer management
 	//
 	// Load balancers are used for multi-node manager clusters and may be
