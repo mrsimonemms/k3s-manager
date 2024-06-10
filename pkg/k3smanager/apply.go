@@ -54,8 +54,9 @@ type Kubeclient struct {
 }
 
 type TemplateData struct {
-	Config    *config.Config
-	JoinToken string
+	Config          *config.Config
+	JoinToken       string
+	ProviderSecrets map[string]string
 }
 
 func login(kubeconfig []byte) (*Kubeclient, error) {
@@ -176,15 +177,20 @@ func ParseTemplates(data TemplateData) (*string, error) {
 }
 
 // Apply will only be run from outside the cluster
-func Apply(ctx context.Context, cfg *config.Config, secrets *provider.K3sAccessSecrets) error {
+func Apply(ctx context.Context, cfg *config.Config, secrets *provider.K3sAccessSecrets, providerSecrets map[string]string) error {
 	kubeconfig, err := login(secrets.Kubeconfig)
 	if err != nil {
 		return err
 	}
 
+	if providerSecrets == nil {
+		providerSecrets = make(map[string]string)
+	}
+
 	templates, err := ParseTemplates(TemplateData{
-		Config:    cfg,
-		JoinToken: string(secrets.JoinToken),
+		Config:          cfg,
+		JoinToken:       string(secrets.JoinToken),
+		ProviderSecrets: providerSecrets,
 	})
 	if err != nil {
 		return err

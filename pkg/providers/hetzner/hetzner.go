@@ -101,6 +101,13 @@ func (h *Hetzner) DatastoreDelete(context.Context) (*provider.DatastoreDeleteRes
 	return nil, errNotImplemented
 }
 
+func (h *Hetzner) GetProviderSecrets(ctx context.Context) (map[string]string, error) {
+	return map[string]string{
+		"privateSSHKey": string(h.providerCfg.privateContent),
+		"publicSSHKey":  string(h.providerCfg.publicContent),
+	}, nil
+}
+
 func (h *Hetzner) LoadBalancerCreate(context.Context) (*provider.LoadBalancerCreateResponse, error) {
 	return nil, errNotImplemented
 }

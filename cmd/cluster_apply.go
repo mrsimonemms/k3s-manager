@@ -63,7 +63,12 @@ var clusterApplyCmd = &cobra.Command{
 			return err
 		}
 
-		if err := k3smanager.Apply(ctx, cfg, secrets); err != nil {
+		providerSecrets, err := p.GetProviderSecrets(ctx)
+		if err != nil {
+			return err
+		}
+
+		if err := k3smanager.Apply(ctx, cfg, secrets, providerSecrets); err != nil {
 			logger.Log().WithError(err).Error("Error applying k3smanager")
 			return err
 		}
