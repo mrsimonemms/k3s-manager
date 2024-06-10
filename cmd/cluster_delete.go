@@ -17,6 +17,8 @@
 package cmd
 
 import (
+	"context"
+
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +26,17 @@ import (
 var clusterDeleteCmd = &cobra.Command{
 	Use:   "delete",
 	Short: "Delete a cluster",
-	RunE:  notImplemented,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		_, p, err := loadConfigFile()
+		if err != nil {
+			return err
+		}
+
+		ctx := context.Background()
+
+		// We don't need to carefully delete things - just destroy everything
+		return p.DeleteAllResources(ctx)
+	},
 }
 
 func init() {

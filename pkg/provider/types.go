@@ -43,6 +43,12 @@ type Provider interface {
 	DatastoreCreate(context.Context) (*DatastoreCreateResponse, error) // Create the datastore
 	DatastoreDelete(context.Context) (*DatastoreDeleteResponse, error) // Delete the datastore
 
+	// Delete all resources
+	//
+	// This is a totally destructive action. Nothing should be
+	// expected to survive this.
+	DeleteAllResources(context.Context) error
+
 	// Provider secrets
 	//
 	// Returns any secrets required to make the in-cluster part
