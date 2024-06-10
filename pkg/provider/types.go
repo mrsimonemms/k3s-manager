@@ -65,7 +65,7 @@ type Provider interface {
 	// smallest, there must be at least one manager node.
 	ManagerAddress(context.Context) (*ManagerAddressResponse, error)
 	NodeCreate(context.Context, *NodeCreateRequest) (*NodeCreateResponse, error)
-	NodeDelete(context.Context) (*NodeDeleteResponse, error)
+	NodeDelete(context.Context, *NodeDeleteRequest) (*NodeDeleteResponse, error)
 	NodeList(context.Context, *NodeListRequest) (*NodeListResponse, error)
 
 	// Prepare
@@ -104,4 +104,11 @@ type NodeCreateResponse struct {
 	Node Node
 }
 
-type NodeDeleteResponse struct{}
+type NodeDeleteRequest struct {
+	ID   string
+	Pool config.ClusterNodePool
+}
+
+type NodeDeleteResponse struct {
+	ID string
+}

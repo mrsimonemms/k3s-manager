@@ -19,15 +19,18 @@ package provider
 import (
 	"fmt"
 
+	"github.com/mrsimonemms/golang-helpers/logger"
 	"github.com/mrsimonemms/k3s-manager/pkg/common"
 	"github.com/mrsimonemms/k3s-manager/pkg/k3s"
 	"github.com/mrsimonemms/k3s-manager/pkg/ssh"
+	"github.com/sirupsen/logrus"
 )
 
 // This is used to normalise the identification of a node and it's parameters.
 // Typically, this data will either be known to the provider or will be taken
 // from labels/tags set to the node.
 type Node struct {
+	ID       string // This is a unique ID set by the provider
 	Name     string
 	NodeType common.NodeType
 	Address  string
@@ -65,18 +68,41 @@ func (n *Node) GetJoinToken() ([]byte, error) {
 // Do the parameters that matter match?
 func (n *Node) Matches(node *Node) bool {
 	if n.Name != node.Name {
+		logger.Logger.WithFields(logrus.Fields{
+			"current": n.Name,
+			"target":  node.Name,
+		}).Debug("Node names don't match")
 		return false
 	}
 	if n.NodeType != node.NodeType {
+		logger.Logger.WithFields(logrus.Fields{
+			"current": n.NodeType,
+			"target":  node.NodeType,
+		}).Debug("Node types don't match")
 		return false
 	}
-	if n.PoolName != node.PoolName {
-		return false
+	// Pool name only set for work nodes
+	if n.PoolName != nil && node.PoolName != nil {
+		if *n.PoolName != *node.PoolName {
+			logger.Logger.WithFields(logrus.Fields{
+				"current": *n.PoolName,
+				"target":  *node.PoolName,
+			}).Debug("Pool names don't match")
+			return false
+		}
 	}
-	if n.Count != node.Count {
+	if *n.Count != *node.Count {
+		logger.Logger.WithFields(logrus.Fields{
+			"current": *n.Count,
+			"target":  *node.Count,
+		}).Debug("Node counts don't match")
 		return false
 	}
 	if n.ProviderOpts != node.ProviderOpts {
+		logger.Logger.WithFields(logrus.Fields{
+			"current": n.ProviderOpts,
+			"target":  node.ProviderOpts,
+		}).Debug("Node provider options don't match")
 		return false
 	}
 
@@ -84,12 +110,13 @@ func (n *Node) Matches(node *Node) bool {
 	return true
 }
 
-func NewNode(name, address string, nodeType common.NodeType, count *int, poolName *string, ssh ssh.SSH, providerOpts ProviderOpts) Node {
+func NewNode(id, name, address string, nodeType common.NodeType, count *int, poolName *string, ssh ssh.SSH, providerOpts ProviderOpts) Node {
 	if nodeType != common.NodeTypeWorker {
 		poolName = nil
 	}
 
 	return Node{
+		ID:           id,
 		Name:         name,
 		Address:      address,
 		NodeType:     nodeType,
