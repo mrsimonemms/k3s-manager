@@ -57,13 +57,6 @@ type Provider interface {
 	// of an SSH key
 	GetProviderSecrets(context.Context) (map[string]string, error)
 
-	// Load balancer management
-	//
-	// Load balancers are used for multi-node manager clusters and may be
-	// used by worker nodes.
-	LoadBalancerCreate(context.Context) (*LoadBalancerCreateResponse, error)
-	LoadBalancerDelete(context.Context) (*LoadBalancerDeleteResponse, error)
-
 	// Node management
 	//
 	// Nodes are the servers in the cluster. They can be managers or
@@ -91,10 +84,6 @@ type ApplyCSIResponse struct{}
 type DatastoreCreateResponse struct{}
 
 type DatastoreDeleteResponse struct{}
-
-type LoadBalancerCreateResponse struct{}
-
-type LoadBalancerDeleteResponse struct{}
 
 type ManagerAddressResponse struct {
 	Address string

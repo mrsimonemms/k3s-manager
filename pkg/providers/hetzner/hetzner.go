@@ -44,6 +44,7 @@ var cloudInitManager []byte
 type Config struct {
 	Token string `validate:"required"`
 	SSHKey
+	LoadBalancer
 }
 
 type server struct {
@@ -58,6 +59,12 @@ type SSHKey struct {
 	Private        string `validate:"required,file"`
 	privateContent []byte
 	Passphase      string
+}
+
+type LoadBalancer struct {
+	Location    string
+	NetworkZone hcloud.NetworkZone
+	Type        string
 }
 
 func (c *Config) load() error {
@@ -240,24 +247,34 @@ func (h *Hetzner) GetProviderSecrets(ctx context.Context) (map[string]string, er
 	}, nil
 }
 
-func (h *Hetzner) LoadBalancerCreate(context.Context) (*provider.LoadBalancerCreateResponse, error) {
-	return nil, errNotImplemented
-}
-
-func (h *Hetzner) LoadBalancerDelete(context.Context) (*provider.LoadBalancerDeleteResponse, error) {
-	return nil, errNotImplemented
-}
-
 func (h *Hetzner) ManagerAddress(ctx context.Context) (*provider.ManagerAddressResponse, error) {
-	servers, err := h.listNodes(ctx, &provider.NodeListRequest{Type: common.NodeTypeManager})
-	if err != nil {
-		return nil, err
-	}
+	serverCount := h.cfg.ManagerPool.Count
 
-	serverCount := len(servers)
-	if serverCount == 0 {
-		return nil, provider.ErrNotConfigured
+	if serverCount > 1 {
+		labels := h.defaultLabels()
+		labels[generateLabelKey(LabelKeyType)] = string(common.NodeTypeManager)
+
+		lbs, _, err := h.client.LoadBalancer.List(ctx, hcloud.LoadBalancerListOpts{
+			ListOpts: hcloud.ListOpts{
+				LabelSelector: labels.String(),
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		if len(lbs) != 1 {
+			return nil, ErrUnknownLoadBalancer
+		}
+
+		return &provider.ManagerAddressResponse{
+			Address: lbs[0].PublicNet.IPv4.IP.String(),
+		}, nil
 	} else if serverCount == 1 {
+		servers, err := h.listNodes(ctx, &provider.NodeListRequest{Type: common.NodeTypeManager})
+		if err != nil {
+			return nil, err
+		}
+
 		server := servers[0]
 
 		return &provider.ManagerAddressResponse{
@@ -265,7 +282,7 @@ func (h *Hetzner) ManagerAddress(ctx context.Context) (*provider.ManagerAddressR
 		}, nil
 	}
 
-	return nil, errNotImplemented
+	return nil, provider.ErrNotConfigured
 }
 
 func (h *Hetzner) NodeCreate(ctx context.Context, opts *provider.NodeCreateRequest) (*provider.NodeCreateResponse, error) {
@@ -438,10 +455,9 @@ func (h *Hetzner) Prepare(ctx context.Context) (*provider.PrepareResponse, error
 	// Ensure manager load balancer if multiple manager nodes
 	if h.cfg.Cluster.ManagerPool.Count > 1 {
 		// Add the load balancer IP in the TLS SANs
-		return nil, errNotImplemented
-		// if _, err := h.ensureManagerLoadBalancer(ctx, labels) ; err != nil {
-		// 	return nil, err
-		// }
+		if _, err := h.ensureManagerLoadBalancer(ctx, labels, network); err != nil {
+			return nil, err
+		}
 	}
 
 	managerList := make([]provider.Node, 0)
@@ -580,6 +596,146 @@ func (h *Hetzner) defaultLabels() labelSelector {
 	}
 }
 
+func (h *Hetzner) ensureManagerLoadBalancer(ctx context.Context, labels labelSelector, network *hcloud.Network) (*hcloud.LoadBalancer, error) {
+	lbConfig := h.providerCfg.LoadBalancer
+	if lbConfig.Type == "" {
+		// Default to the cheapest version
+		lbConfig.Type = "lb11"
+
+		logger.Log().Warnf("Load balancer type not set - defaulting to %s", lbConfig.Type)
+	}
+
+	l := h.logger.WithFields(logrus.Fields{
+		"labels":           labels,
+		"loadbalancerType": lbConfig.Type,
+		"location":         lbConfig.Location,
+		"networkZone":      lbConfig.NetworkZone,
+	})
+
+	if lbConfig.Location == "" && lbConfig.NetworkZone == "" {
+		return nil, ErrBadLoadBalancerConfig
+	}
+
+	l.Debug("Finding load balancer type")
+	lbType, _, err := h.client.LoadBalancerType.GetByName(ctx, lbConfig.Type)
+	if err != nil {
+		l.WithError(err).Error("Error getting manager load balancer type")
+		return nil, err
+	}
+	if lbType == nil {
+		return nil, ErrUnknownLoadBalancerType
+	}
+
+	var location *hcloud.Location
+	var networkZone hcloud.NetworkZone
+
+	if lbConfig.Location != "" {
+		l.Debug("Validating server location")
+		location, _, err = h.client.Location.GetByName(ctx, lbConfig.Location)
+		if err != nil {
+			l.WithError(err).Error("Error retrieving server location")
+			return nil, err
+		}
+		if location == nil {
+			l.Error("Unknown server location")
+			return nil, ErrUnknownLocation
+		}
+	} else if lbConfig.NetworkZone != "" {
+		l.Debug("Uzing network zone for load balancer")
+		networkZone = lbConfig.NetworkZone
+	}
+
+	return upsert[hcloud.LoadBalancer]{
+		logger:       l,
+		resourceType: "load-balancer",
+		getId: func(n *hcloud.LoadBalancer) any {
+			return n.ID
+		},
+		list: func(ctx context.Context) ([]*hcloud.LoadBalancer, error) {
+			loadBalancers, _, err := h.client.LoadBalancer.List(ctx, hcloud.LoadBalancerListOpts{
+				ListOpts: hcloud.ListOpts{
+					LabelSelector: labels.String(),
+				},
+			})
+
+			return loadBalancers, err
+		},
+		create: func(ctx context.Context) (*hcloud.LoadBalancer, error) {
+			result, _, err := h.client.LoadBalancer.Create(ctx, hcloud.LoadBalancerCreateOpts{
+				Name:             h.cfg.Name,
+				LoadBalancerType: lbType,
+				Labels:           labels,
+				Network:          network,
+				Location:         location,
+				NetworkZone:      networkZone,
+				Targets: []hcloud.LoadBalancerCreateOptsTarget{
+					{
+						Type: hcloud.LoadBalancerTargetTypeLabelSelector,
+						LabelSelector: hcloud.LoadBalancerCreateOptsTargetLabelSelector{
+							Selector: labels.String(),
+						},
+					},
+				},
+				Services: []hcloud.LoadBalancerCreateOptsService{
+					{
+						Protocol:        hcloud.LoadBalancerServiceProtocolTCP,
+						ListenPort:      hcloud.Ptr(6443),
+						DestinationPort: hcloud.Ptr(6443),
+					},
+				},
+				Algorithm: &hcloud.LoadBalancerAlgorithm{
+					Type: hcloud.LoadBalancerAlgorithmTypeRoundRobin,
+				},
+			})
+			if err != nil {
+				return nil, err
+			}
+
+			if err := h.waitForActionCompletion(ctx, result.Action); err != nil {
+				return nil, err
+			}
+
+			return result.LoadBalancer, err
+		},
+		update: func(ctx context.Context, loadBalancer *hcloud.LoadBalancer) (*hcloud.LoadBalancer, error) {
+			loadBalancer, _, err := h.client.LoadBalancer.Update(ctx, loadBalancer, hcloud.LoadBalancerUpdateOpts{
+				Name:   h.cfg.Name,
+				Labels: labels,
+			})
+			if err != nil {
+				return nil, err
+			}
+
+			if loadBalancer.LoadBalancerType.ID != lbType.ID {
+				action, _, err := h.client.LoadBalancer.ChangeType(ctx, loadBalancer, hcloud.LoadBalancerChangeTypeOpts{
+					LoadBalancerType: lbType,
+				})
+				if err != nil {
+					return nil, err
+				}
+
+				if err := h.waitForActionCompletion(ctx, action); err != nil {
+					return nil, err
+				}
+			}
+			if loadBalancer.Algorithm.Type != hcloud.LoadBalancerAlgorithmTypeRoundRobin {
+				action, _, err := h.client.LoadBalancer.ChangeAlgorithm(ctx, loadBalancer, hcloud.LoadBalancerChangeAlgorithmOpts{
+					Type: hcloud.LoadBalancerAlgorithmTypeRoundRobin,
+				})
+				if err != nil {
+					return nil, err
+				}
+
+				if err := h.waitForActionCompletion(ctx, action); err != nil {
+					return nil, err
+				}
+			}
+
+			return loadBalancer, err
+		},
+	}.exec(ctx)
+}
+
 func (h *Hetzner) ensureManagerServer(ctx context.Context, labels labelSelector, sshKey *hcloud.SSHKey, placementGroup *hcloud.PlacementGroup, network *hcloud.Network) ([]server, error) {
 	l := h.logger.WithField("labels", labels)
 
@@ -612,7 +768,7 @@ func (h *Hetzner) ensureManagerServer(ctx context.Context, labels labelSelector,
 					s.Name,
 					s.PublicNet.IPv4.IP.String(),
 					common.NodeTypeManager,
-					common.Ptr(0),
+					hcloud.Ptr(0),
 					nil,
 					h.createServerSSH(s),
 					provider.ProviderOpts{
