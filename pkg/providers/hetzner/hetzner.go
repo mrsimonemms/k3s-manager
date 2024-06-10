@@ -101,6 +101,138 @@ func (h *Hetzner) DatastoreDelete(context.Context) (*provider.DatastoreDeleteRes
 	return nil, errNotImplemented
 }
 
+func (h *Hetzner) DeleteAllResources(ctx context.Context) error {
+	labels := h.defaultLabels()
+	l := logger.Log().WithField("labels", labels)
+
+	hcloudLabels := hcloud.ListOpts{
+		LabelSelector: labels.String(),
+	}
+
+	// Delete servers
+	l.Debug("Finding servers to destroy")
+	servers, err := h.listNodes(ctx, &provider.NodeListRequest{})
+	if err != nil {
+		l.WithError(err).Error("Unable to list servers")
+		return err
+	}
+
+	for _, s := range servers {
+		l1 := l.WithField("server", s.Machine.ID)
+		l1.Info("Deleting server")
+		result, _, err := h.client.Server.DeleteWithResult(ctx, s.Machine)
+		if err != nil {
+			l1.WithError(err).Error("Error trigger server delete")
+		}
+
+		if err := h.waitForActionCompletion(ctx, result.Action, time.Minute*5); err != nil {
+			l1.WithError(err).Error("Failed to delete server")
+			return err
+		}
+		l1.Info("Server deleted")
+	}
+
+	// Delete placement groups
+	l.Debug("Finding placement groups to destroy")
+	groups, _, err := h.client.PlacementGroup.List(ctx, hcloud.PlacementGroupListOpts{
+		ListOpts: hcloudLabels,
+	})
+	if err != nil {
+		l.WithError(err).Error("Failed to list placement groups")
+		return err
+	}
+	for _, g := range groups {
+		l1 := l.WithField("group", g.ID)
+		l1.Info("Deleting placement group")
+		if _, err := h.client.PlacementGroup.Delete(ctx, g); err != nil {
+			l1.WithError(err).Error("Failed to delete placement group")
+			return err
+		}
+		l1.Info("Placement group deleted")
+	}
+
+	// Delete load balancers
+	l.Debug("Finding load balancers to destroy")
+	lbs, _, err := h.client.LoadBalancer.List(ctx, hcloud.LoadBalancerListOpts{
+		ListOpts: hcloudLabels,
+	})
+	if err != nil {
+		l.WithError(err).Error("Failed to list load balancers")
+		return err
+	}
+	for _, lb := range lbs {
+		l1 := l.WithField("id", lb.ID)
+		l1.Info("Deleting load balancer")
+		if _, err := h.client.LoadBalancer.Delete(ctx, lb); err != nil {
+			l1.WithError(err).Error("Failed to delete load balancer")
+			return err
+		}
+		l1.Info("Load balancer deleted")
+	}
+
+	// Delete SSH keys
+	l.Debug("Finding SSH keys to destroy")
+	keys, _, err := h.client.SSHKey.List(ctx, hcloud.SSHKeyListOpts{
+		ListOpts: hcloudLabels,
+	})
+	if err != nil {
+		l.WithError(err).Error("Failed to list SSH keys")
+		return err
+	}
+	for _, k := range keys {
+		l1 := l.WithFields(logrus.Fields{
+			"fingerprint": k.Fingerprint,
+			"id":          k.ID,
+		})
+		l1.Info("Deleting SSH key")
+		if _, err := h.client.SSHKey.Delete(ctx, k); err != nil {
+			l1.WithError(err).Error("Failed to delete SSH key")
+		}
+		l1.Info("SSH key deleted")
+	}
+
+	// Delete firewall
+	l.Debug("Finding firewalls to destroy")
+	firewalls, _, err := h.client.Firewall.List(ctx, hcloud.FirewallListOpts{
+		ListOpts: hcloudLabels,
+	})
+	if err != nil {
+		l.WithError(err).Error("Failed to list firewalls")
+		return err
+	}
+	for _, f := range firewalls {
+		l1 := l.WithField("id", f.ID)
+		l1.Info("Deleting firewall")
+		if _, err := h.client.Firewall.Delete(ctx, f); err != nil {
+			l1.WithError(err).Error("Failed to delete firewall")
+		}
+		l1.Info("Firewall deleted")
+	}
+
+	// Delete network
+	l.Debug("Finding networks to destroy")
+	networks, _, err := h.client.Network.List(ctx, hcloud.NetworkListOpts{
+		ListOpts: hcloudLabels,
+	})
+	if err != nil {
+		l.WithError(err).Error("Failed to list networks")
+		return err
+	}
+	for _, n := range networks {
+		l1 := l.WithField("id", n.ID)
+		l1.Info("Deleting network")
+		if _, err := h.client.Network.Delete(ctx, n); err != nil {
+			l1.WithError(err).Error("Failed to delete network")
+			return err
+		}
+		l1.Info("Networking deleted")
+	}
+
+	l.Info("All resources deleted")
+
+	return nil
+}
+
 func (h *Hetzner) GetProviderSecrets(ctx context.Context) (map[string]string, error) {
 	return map[string]string{
 		"privateSSHKey": string(h.providerCfg.privateContent),
