@@ -194,6 +194,7 @@ func (h *Hetzner) NodeCreate(ctx context.Context, opts *provider.NodeCreateReque
 
 	return &provider.NodeCreateResponse{
 		Node: provider.NewNode(
+			strconv.FormatInt(server.ID, 10),
 			server.Name,
 			server.PublicNet.IPv4.IP.String(),
 			opts.NodeType,
@@ -201,7 +202,7 @@ func (h *Hetzner) NodeCreate(ctx context.Context, opts *provider.NodeCreateReque
 			&opts.Pool.Name,
 			h.createServerSSH(server),
 			provider.ProviderOpts{
-				Location:    server.Datacenter.Name,
+				Location:    server.Datacenter.Location.Name,
 				MachineType: server.ServerType.Name,
 				Arch:        string(server.Image.Architecture),
 				Image:       server.Image.Name,
@@ -210,8 +211,42 @@ func (h *Hetzner) NodeCreate(ctx context.Context, opts *provider.NodeCreateReque
 	}, nil
 }
 
-func (h *Hetzner) NodeDelete(context.Context) (*provider.NodeDeleteResponse, error) {
-	return nil, errNotImplemented
+func (h *Hetzner) NodeDelete(ctx context.Context, opts *provider.NodeDeleteRequest) (*provider.NodeDeleteResponse, error) {
+	l := logger.Log().WithField("id", opts.ID)
+
+	l.Debug("Parsing server ID to int64")
+	id, err := strconv.ParseInt(opts.ID, 10, 64)
+	if err != nil {
+		l.WithError(err).Error("Server ID is invalid")
+		return nil, err
+	}
+	l = l.WithField("id", id)
+
+	l.Debug("Getting server")
+	server, _, err := h.client.Server.GetByID(ctx, id)
+	if err != nil {
+		l.WithError(err).Error("Cannot retrieve server")
+		return nil, err
+	}
+	if server == nil {
+		l.Error("Server is unknown")
+	}
+
+	l.Debug("Deleting server")
+	result, _, err := h.client.Server.DeleteWithResult(ctx, server)
+	if err != nil {
+		l.WithError(err).Error("Unable to delete server")
+		return nil, err
+	}
+
+	if err := h.waitForActionCompletion(ctx, result.Action, time.Minute*5); err != nil {
+		l.WithError(err).Error("Error deleting server")
+		return nil, err
+	}
+
+	return &provider.NodeDeleteResponse{
+		ID: opts.ID,
+	}, nil
 }
 
 func (h *Hetzner) NodeList(ctx context.Context, opts *provider.NodeListRequest) (*provider.NodeListResponse, error) {
@@ -441,6 +476,7 @@ func (h *Hetzner) ensureManagerServer(ctx context.Context, labels labelSelector,
 				Type:    common.NodeTypeManager,
 				Machine: s,
 				Node: provider.NewNode(
+					strconv.FormatInt(s.ID, 10),
 					s.Name,
 					s.PublicNet.IPv4.IP.String(),
 					common.NodeTypeManager,
@@ -448,7 +484,7 @@ func (h *Hetzner) ensureManagerServer(ctx context.Context, labels labelSelector,
 					nil,
 					h.createServerSSH(s),
 					provider.ProviderOpts{
-						Location:    s.Datacenter.Name,
+						Location:    s.Datacenter.Location.Name,
 						MachineType: s.ServerType.Name,
 						Arch:        string(s.Image.Architecture),
 						Image:       s.Image.Name,
@@ -807,18 +843,19 @@ func (h *Hetzner) listNodes(ctx context.Context, opts *provider.NodeListRequest)
 		if p, ok := s.Labels[generateLabelKey(LabelKeyPool)]; ok {
 			poolName = &p
 		}
-		var machineType common.NodeType
+		var nodeType common.NodeType
 		if t, ok := s.Labels[generateLabelKey(LabelKeyType)]; ok {
-			machineType = common.NodeType(t)
+			nodeType = common.NodeType(t)
 		}
 
 		out := server{
 			Machine: s,
-			Type:    machineType,
+			Type:    nodeType,
 			Node: provider.NewNode(
+				strconv.FormatInt(s.ID, 10),
 				s.Name,
 				s.PublicNet.IPv4.IP.String(),
-				common.NodeTypeManager,
+				nodeType,
 				count,
 				poolName,
 				ssh.New(easyssh.MakeConfig{
@@ -830,7 +867,7 @@ func (h *Hetzner) listNodes(ctx context.Context, opts *provider.NodeListRequest)
 					Timeout:    10 * time.Second,
 				}),
 				provider.ProviderOpts{
-					Location:    s.Datacenter.Name,
+					Location:    s.Datacenter.Location.Name,
 					MachineType: s.ServerType.Name,
 					Arch:        string(s.Image.Architecture),
 					Image:       s.Image.Name,
