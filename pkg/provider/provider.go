@@ -67,11 +67,13 @@ func EnsureK3s(ctx context.Context, cfg *config.Config, managers []Node, kubecon
 		return err
 	}
 
-	logger.Log().Info("Waiting for manager to become ready")
+	l := logger.Log().WithField("kubehost", kubeconfigHost)
+
+	l.Info("Waiting for manager to become ready")
 	if err := manager.SSH.WaitUntilCloudInitReady(ctx); err != nil {
 		return err
 	}
-	logger.Log().Info("Manager ready")
+	l.Info("Manager ready")
 
 	command := k3s.K3s{
 		IsAgent:    false,
@@ -83,21 +85,21 @@ func EnsureK3s(ctx context.Context, cfg *config.Config, managers []Node, kubecon
 		K3sVersion: "", // @todo(sje): add version
 	}
 
-	logger.Log().Info("Installing K3s")
+	l.Info("Installing K3s")
 	_, stderr, _, err := manager.SSH.Run(command.GenerateInstallCommand(), time.Minute*5)
 	if err != nil {
-		logger.Log().WithError(err).WithField("stderr", stderr).Error("Error executing k3s install script")
+		l.WithError(err).WithField("stderr", stderr).Error("Error executing k3s install script")
 		return err
 	}
 
-	logger.Log().Debug("Ensuring k3s is started")
+	l.Debug("Ensuring k3s is started")
 	_, stderr, _, err = manager.SSH.Run("sudo systemctl start k3s", time.Minute*5)
 	if err != nil {
-		logger.Log().WithError(err).WithField("stderr", stderr).Error("Error executing k3s install script")
+		l.WithError(err).WithField("stderr", stderr).Error("Error executing k3s install script")
 		return err
 	}
 
-	logger.Log().Info("K3s is installed to the manager node")
+	l.Info("K3s is installed to the manager node")
 
 	return nil
 }

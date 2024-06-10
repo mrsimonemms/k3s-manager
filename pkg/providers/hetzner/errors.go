@@ -22,11 +22,14 @@ import (
 )
 
 var (
-	ErrBadSSHKey         = errors.New("bad ssh key")
-	ErrSSHKeyNotPresent  = errors.New("ssh key not present")
-	ErrUnknownImage      = errors.New("unknown server image")
-	ErrUnknownLocation   = errors.New("unknown server location")
-	ErrUnknownServerType = errors.New("unknown server type")
+	ErrBadSSHKey               = errors.New("bad ssh key")
+	ErrBadLoadBalancerConfig   = errors.New("load balancer config must have location or networkZone set")
+	ErrSSHKeyNotPresent        = errors.New("ssh key not present")
+	ErrUnknownImage            = errors.New("unknown server image")
+	ErrUnknownLocation         = errors.New("unknown server location")
+	ErrUnknownLoadBalancer     = errors.New("unknown load balancer")
+	ErrUnknownLoadBalancerType = errors.New("unknown load balancer type")
+	ErrUnknownServerType       = errors.New("unknown server type")
 )
 
 var errNotImplemented = errors.New("command not yet implemented")
