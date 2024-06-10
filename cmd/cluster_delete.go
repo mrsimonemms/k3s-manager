@@ -24,8 +24,9 @@ import (
 
 // clusterDeleteCmd represents the destroy command
 var clusterDeleteCmd = &cobra.Command{
-	Use:   "delete",
-	Short: "Delete a cluster",
+	Use:     "delete",
+	Short:   "Delete a cluster",
+	Aliases: []string{"destroy"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		_, p, err := loadConfigFile()
 		if err != nil {

@@ -27,8 +27,9 @@ import (
 
 // clusterApplyCmd represents the create command
 var clusterApplyCmd = &cobra.Command{
-	Use:   "apply",
-	Short: "Apply configuration to a cluster",
+	Use:     "apply",
+	Short:   "Apply configuration to a cluster",
+	Aliases: []string{"create"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, p, err := loadConfigFile()
 		if err != nil {
