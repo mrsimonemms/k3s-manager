@@ -22,11 +22,10 @@ import (
 
 	"github.com/appleboy/easyssh-proxy"
 	"github.com/mrsimonemms/golang-helpers/logger"
+	"github.com/mrsimonemms/k3s-manager/pkg/common"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )
-
-type ReadyCheck func() (bool, error)
 
 type SSH struct {
 	ssh easyssh.MakeConfig
@@ -49,7 +48,7 @@ func (s *SSH) Run(command string, timeout ...time.Duration) (outStr string, errS
 func (s *SSH) WaitUntilCloudInitReady(ctx context.Context, timeout ...time.Duration) error {
 	logger.Log().Debug("Waiting for cloud-init server to become ready")
 
-	return s.WaitUntilReady(ctx, func() (bool, error) {
+	return common.WaitUntilReady(ctx, func() (bool, error) {
 		stdout, stderr, _, err := s.ssh.Run("cloud-init status -l --format yaml", time.Second)
 		if err != nil {
 			// Server not yet accepting SSH connections
@@ -89,42 +88,6 @@ func (s *SSH) WaitUntilCloudInitReady(ctx context.Context, timeout ...time.Durat
 
 		return false, nil
 	}, timeout...)
-}
-
-func (s *SSH) WaitUntilReady(ctx context.Context, readinessCheck ReadyCheck, timeout ...time.Duration) error {
-	if len(timeout) == 0 {
-		timeout = []time.Duration{
-			10 * time.Minute,
-		}
-	}
-
-	startTime := time.Now()
-	timeoutTime := startTime.Add(timeout[0])
-	count := 0
-
-	var waitErr error
-	for {
-		if count > 0 {
-			time.Sleep(time.Second)
-		}
-		count += 1
-		now := time.Now()
-
-		if now.After(timeoutTime) {
-			return ErrTimeout
-		}
-
-		isReady, err := readinessCheck()
-		if err != nil {
-			waitErr = err
-			break
-		}
-		if isReady {
-			break
-		}
-	}
-
-	return waitErr
 }
 
 func New(ssh easyssh.MakeConfig) SSH {
