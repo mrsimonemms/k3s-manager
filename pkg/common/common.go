@@ -17,12 +17,19 @@
 package common
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+var ErrTimeout = errors.New("ssh timeout")
+
+type ReadyCheck func() (bool, error)
 
 func AppendRandomString(str string, length float64) string {
 	return fmt.Sprintf("%s-%s", str, RandomString(length))
@@ -42,4 +49,40 @@ func RandomString(length float64) string {
 	}
 
 	return rand[0:int(length)]
+}
+
+func WaitUntilReady(ctx context.Context, readinessCheck ReadyCheck, timeout ...time.Duration) error {
+	if len(timeout) == 0 {
+		timeout = []time.Duration{
+			10 * time.Minute,
+		}
+	}
+
+	startTime := time.Now()
+	timeoutTime := startTime.Add(timeout[0])
+	count := 0
+
+	var waitErr error
+	for {
+		if count > 0 {
+			time.Sleep(time.Second)
+		}
+		count += 1
+		now := time.Now()
+
+		if now.After(timeoutTime) {
+			return ErrTimeout
+		}
+
+		isReady, err := readinessCheck()
+		if err != nil {
+			waitErr = err
+			break
+		}
+		if isReady {
+			break
+		}
+	}
+
+	return waitErr
 }

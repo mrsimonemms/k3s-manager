@@ -18,7 +18,4 @@ package ssh
 
 import "errors"
 
-var (
-	ErrCloudInit = errors.New("cloud-init run errored")
-	ErrTimeout   = errors.New("ssh timeout")
-)
+var ErrCloudInit = errors.New("cloud-init run errored")
