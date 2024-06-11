@@ -19,7 +19,7 @@ package hetzner
 import (
 	"bytes"
 	"context"
-	_ "embed"
+	"embed"
 	"fmt"
 	"net"
 	"os"
@@ -27,12 +27,15 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/Masterminds/sprig/v3"
 	"github.com/appleboy/easyssh-proxy"
 	"github.com/go-playground/validator/v10"
+	"github.com/google/go-github/v62/github"
 	"github.com/hetznercloud/hcloud-go/v2/hcloud"
 	"github.com/mrsimonemms/golang-helpers/logger"
 	"github.com/mrsimonemms/k3s-manager/pkg/common"
 	"github.com/mrsimonemms/k3s-manager/pkg/config"
+	"github.com/mrsimonemms/k3s-manager/pkg/k3smanager"
 	"github.com/mrsimonemms/k3s-manager/pkg/provider"
 	"github.com/mrsimonemms/k3s-manager/pkg/ssh"
 	"github.com/sirupsen/logrus"
@@ -41,10 +44,14 @@ import (
 //go:embed cloud-init/manager.yaml.tpl
 var cloudInitManager []byte
 
+//go:embed templates/*.yaml
+var templates embed.FS
+
 type Config struct {
 	Token string `validate:"required"`
 	SSHKey
 	LoadBalancer
+	CustomResources
 }
 
 type server struct {
@@ -59,6 +66,10 @@ type SSHKey struct {
 	Private        string `validate:"required,file"`
 	privateContent []byte
 	Passphase      string
+}
+
+type CustomResources struct {
+	CSIVersion string
 }
 
 type LoadBalancer struct {
@@ -96,8 +107,73 @@ type Hetzner struct {
 	logger      *logrus.Entry
 }
 
-func (h *Hetzner) CustomResources(context.Context) (*provider.CustomResourcesResponse, error) {
-	return nil, errNotImplemented
+func (h *Hetzner) CustomResources(ctx context.Context) (*provider.CustomResourcesResponse, error) {
+	l := logger.Log().WithField("csiVersion", h.providerCfg.CustomResources.CSIVersion)
+
+	k8sResources := make([]string, 0)
+
+	if h.providerCfg.CustomResources.CSIVersion == "" {
+		h.providerCfg.CustomResources.CSIVersion = "latest"
+
+		l.Warnf("CSI driver version not set - defaulting to %s", h.providerCfg.CustomResources.CSIVersion)
+	}
+
+	l.Debug("Searching for CSI driver")
+	ghClient := github.NewClient(nil)
+	var release *github.RepositoryRelease
+	var err error
+	if h.providerCfg.CustomResources.CSIVersion == "latest" {
+		release, _, err = ghClient.Repositories.GetLatestRelease(ctx, GitHubOrg, GitHubCSIDriverRepo)
+	} else {
+		release, _, err = ghClient.Repositories.GetReleaseByTag(ctx, GitHubOrg, GitHubCSIDriverRepo, h.providerCfg.CustomResources.CSIVersion)
+	}
+	if err != nil {
+		l.WithError(err).Error("Failed to get CSI driver release")
+		return nil, err
+	}
+
+	l = l.WithField("release", *release.TagName)
+
+	l.Debug("Download CSI file")
+	contents, _, err := ghClient.Repositories.DownloadContents(ctx, GitHubOrg, GitHubCSIDriverRepo, GitHubCSIFilePath, &github.RepositoryContentGetOptions{
+		Ref: *release.TagName,
+	})
+	if err != nil {
+		l.WithError(err).Error("Failed to get CSI contents")
+		return nil, err
+	}
+
+	buf := new(bytes.Buffer)
+	if _, err := buf.ReadFrom(contents); err != nil {
+		l.WithError(err).Error("Failed to read CSI contents")
+		return nil, err
+	}
+	k8sResources = append(k8sResources, buf.String())
+
+	tpl, err := template.New("hetzner").
+		Funcs(sprig.FuncMap()).
+		Funcs(k3smanager.HelmFuncs).
+		ParseFS(templates, "templates/*.yaml")
+	if err != nil {
+		l.WithError(err).Error("Failed to prepare templates")
+		return nil, err
+	}
+
+	files, err := k3smanager.ParseTemplates(tpl, struct {
+		Config Config
+	}{
+		Config: h.providerCfg,
+	}, "templates/")
+	if err != nil {
+		l.WithError(err).Error("Failed to parse templates")
+		return nil, err
+	}
+
+	k8sResources = append(k8sResources, files...)
+
+	return &provider.CustomResourcesResponse{
+		Resources: k8sResources,
+	}, nil
 }
 
 func (h *Hetzner) DatastoreCreate(context.Context) (*provider.DatastoreCreateResponse, error) {

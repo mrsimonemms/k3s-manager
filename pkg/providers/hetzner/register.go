@@ -46,6 +46,7 @@ func factory(k3m *config.Config) (provider.Provider, error) {
 
 	l.Debug("Loading provider")
 
+	// Load with sensible defaults
 	var cfg Config
 	if err := mapstructure.Decode(k3m.Provider.Config, &cfg); err != nil {
 		return nil, err

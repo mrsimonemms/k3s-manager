@@ -123,22 +123,14 @@ func login(kubeconfig []byte) (*Kubeclient, error) {
 	}, err
 }
 
-func ParseTemplates(data TemplateData) (*string, error) {
-	tpl, err := template.New("k8s").
-		Funcs(sprig.FuncMap()).
-		Funcs(helmFuncs).
-		ParseFS(templates, "templates/*.yaml")
-	if err != nil {
-		return nil, err
-	}
-
+func ParseTemplates(tpl *template.Template, data any, filePrefix string) ([]string, error) {
 	files := make([]string, 0)
 	if err := fs.WalkDir(templates, ".", func(path string, d fs.DirEntry, err error) error {
 		if d.IsDir() {
 			return nil
 		}
 
-		file, _ := strings.CutPrefix(path, "templates/")
+		file, _ := strings.CutPrefix(path, filePrefix)
 
 		var output bytes.Buffer
 		if err := tpl.ExecuteTemplate(&output, file, data); err != nil {
@@ -154,6 +146,10 @@ func ParseTemplates(data TemplateData) (*string, error) {
 		return nil, err
 	}
 
+	return files, nil
+}
+
+func SortTemplates(files []string) (*string, error) {
 	// Convert all the YAML into sortable RuntimeObjects
 	o, err := YAMLToSortableObjects(files)
 	if err != nil {
@@ -178,7 +174,7 @@ func ParseTemplates(data TemplateData) (*string, error) {
 }
 
 // Apply will only be run from outside the cluster
-func Apply(ctx context.Context, cfg *config.Config, secrets *provider.K3sAccessSecrets, providerSecrets map[string]string) error {
+func Apply(ctx context.Context, cfg *config.Config, secrets *provider.K3sAccessSecrets, providerSecrets map[string]string, customResources *provider.CustomResourcesResponse) error {
 	logger.Log().Info("Applying k3smanager resources to the cluster")
 	kubeconfig, err := login(secrets.Kubeconfig)
 	if err != nil {
@@ -189,28 +185,50 @@ func Apply(ctx context.Context, cfg *config.Config, secrets *provider.K3sAccessS
 		providerSecrets = make(map[string]string)
 	}
 
-	templates, err := ParseTemplates(TemplateData{
+	tpl, err := template.New("k8s").
+		Funcs(sprig.FuncMap()).
+		Funcs(HelmFuncs).
+		ParseFS(templates, "templates/*.yaml")
+	if err != nil {
+		return err
+	}
+
+	files, err := ParseTemplates(tpl, TemplateData{
 		Config:          cfg,
 		JoinToken:       string(secrets.JoinToken),
 		ProviderSecrets: providerSecrets,
-	})
+	}, "templates/")
 	if err != nil {
+		return err
+	}
+
+	if customResources != nil {
+		logger.Log().WithField("resourceCount", len(customResources.Resources)).Debug("Adding custom resources")
+		files = append(files, customResources.Resources...)
+	}
+
+	templates, err := SortTemplates(files)
+	if err != nil {
+		logger.Log().WithError(err).Error("Error sorting the templates")
 		return err
 	}
 
 	decoder := yamlutil.NewYAMLOrJSONDecoder(strings.NewReader(*templates), 100)
 	var rawObj runtime.RawExtension
 	if err = decoder.Decode(&rawObj); err != nil {
+		logger.Log().WithError(err).Error("Error decoding the templates")
 		return err
 	}
 
 	obj, gvk, err := yaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme).Decode(rawObj.Raw, nil, nil)
 	if err != nil {
+		logger.Log().WithError(err).Error("Error serializing the templates")
 		return err
 	}
 
 	unstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
 	if err != nil {
+		logger.Log().WithError(err).Error("Error structuring the templates")
 		return err
 	}
 
@@ -218,20 +236,25 @@ func Apply(ctx context.Context, cfg *config.Config, secrets *provider.K3sAccessS
 
 	gr, err := restmapper.GetAPIGroupResources(kubeconfig.Clientset.Discovery())
 	if err != nil {
+		logger.Log().WithError(err).Error("Error grouping the templates")
 		return err
 	}
 
 	mapper := restmapper.NewDiscoveryRESTMapper(gr)
 	mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 	if err != nil {
+		logger.Log().WithError(err).Error("Error mapping the templates")
 		return err
 	}
 
 	dri := kubeconfig.DynamicClient.Resource(mapping.Resource).Namespace("kube-system")
 
-	_, err = dri.Apply(ctx, "k3s-manager", unstructuredObj, metav1.ApplyOptions{
-		FieldManager: "k3s-manager",
-	})
+	if _, err := dri.Create(ctx, unstructuredObj, metav1.CreateOptions{}); err != nil {
+		// if _, err := dri.Apply(ctx, "", unstructuredObj, metav1.ApplyOptions{
+		// 	FieldManager: "k3s-manager-field",
+		// })
+		logger.Log().WithError(err).Error("Error applying the templates")
+	}
 
 	return err
 }

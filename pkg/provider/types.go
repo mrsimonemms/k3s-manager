@@ -81,7 +81,9 @@ type Provider interface {
 	SetClusterNodePoolDefaults(config.ClusterNodePool) config.ClusterNodePool
 }
 
-type CustomResourcesResponse struct{}
+type CustomResourcesResponse struct {
+	Resources []string
+}
 
 type DatastoreCreateResponse struct{}
 

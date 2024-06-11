@@ -40,3 +40,10 @@ const (
 var ErrMultipleCandidates = func(resource string) error {
 	return fmt.Errorf("multiple %s resources exist", resource)
 }
+
+// @todo(sje): allow this to be configurable in the config
+const (
+	GitHubOrg           = "hetznercloud"
+	GitHubCSIDriverRepo = "csi-driver"
+	GitHubCSIFilePath   = "/deploy/kubernetes/hcloud-csi.yml"
+)
