@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-var helmFuncs = template.FuncMap{
+var HelmFuncs = template.FuncMap{
 	"fromYaml": fromYAML,
 	"toYaml":   toYAML,
 }

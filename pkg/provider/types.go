@@ -24,13 +24,15 @@ import (
 )
 
 type Provider interface {
-	// CSI management
+	// Custom resources
 	//
-	// A Container Storage Interface allows Kubernetes to use volumes provided
-	// by the cloud provider
+	// You may need to apply resources to your cluster to allow it to use
+	// provider-specific dependencies in your cluster. Container Storage
+	// Interfaces are a good example of this, where it allows Kubernetes to
+	// use native volumes for data storage.
 	//
 	// @link https://kubernetes.io/blog/2019/01/15/container-storage-interface-ga/
-	ApplyCSI(context.Context) (*ApplyCSIResponse, error) // Apply the CSI to the cluster
+	CustomResources(context.Context) (*CustomResourcesResponse, error)
 
 	// Datastore management
 	//
@@ -79,7 +81,9 @@ type Provider interface {
 	SetClusterNodePoolDefaults(config.ClusterNodePool) config.ClusterNodePool
 }
 
-type ApplyCSIResponse struct{}
+type CustomResourcesResponse struct {
+	Resources []string
+}
 
 type DatastoreCreateResponse struct{}
 

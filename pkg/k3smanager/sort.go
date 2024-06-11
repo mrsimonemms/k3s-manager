@@ -17,6 +17,7 @@
 package k3smanager
 
 import (
+	"regexp"
 	"sort"
 	"strings"
 
@@ -56,21 +57,27 @@ func SortByKind(objects []SortableObject) ([]SortableObject, error) {
 func YAMLToSortableObjects(templates []string) ([]SortableObject, error) {
 	sortedObjects := make([]SortableObject, 0)
 
-	for _, p := range templates {
-		var v SortableObject
-		err := yaml.Unmarshal([]byte(p), &v)
-		if err != nil {
-			return nil, err
-		}
+	for _, o := range templates {
+		// Assume multi-document YAML
+		re := regexp.MustCompile("(^|\n)---")
+		items := re.Split(o, -1)
 
-		// remove any empty charts
-		ctnt := strings.Trim(p, "\n")
-		if len(strings.TrimSpace(ctnt)) == 0 {
-			continue
-		}
+		for _, p := range items {
+			var v SortableObject
+			err := yaml.Unmarshal([]byte(p), &v)
+			if err != nil {
+				return nil, err
+			}
 
-		v.Content = ctnt
-		sortedObjects = append(sortedObjects, v)
+			// remove any empty charts
+			ctnt := strings.Trim(p, "\n")
+			if len(strings.TrimSpace(ctnt)) == 0 {
+				continue
+			}
+
+			v.Content = ctnt
+			sortedObjects = append(sortedObjects, v)
+		}
 	}
 
 	return sortedObjects, nil

@@ -8,4 +8,5 @@
 | [pkg/k3smanager/operator.go](pkg/k3smanager/operator.go#L145) | 145 | Simon Emms <simon@simonemms.com> | remove node from cluster before deleting |
 | [pkg/k3smanager/operator.go](pkg/k3smanager/operator.go#L169) | 169 | Simon Emms <simon@simonemms.com> | add node to cluster after creating |
 | [pkg/provider/provider.go](pkg/provider/provider.go#L55) | 55 | Simon Emms <simon@simonemms.com> | find a nicer way of handling multiple managers |
-| [pkg/providers/hetzner/hetzner.go](pkg/providers/hetzner/hetzner.go#L1089) | 1089 | Simon Emms <simon@simonemms.com> | handle changes to the network subnet |
+| [pkg/providers/hetzner/constants.go](pkg/providers/hetzner/constants.go#L44) | 44 | Simon Emms <simon@simonemms.com> | allow this to be configurable in the config |
+| [pkg/providers/hetzner/hetzner.go](pkg/providers/hetzner/hetzner.go#L1165) | 1165 | Simon Emms <simon@simonemms.com> | handle changes to the network subnet |

@@ -70,11 +70,16 @@ var clusterApplyCmd = &cobra.Command{
 			return err
 		}
 
+		customResources, err := p.CustomResources(ctx)
+		if err != nil {
+			return err
+		}
+
 		if err := k3smanager.ConnectToCluster(ctx, secrets, time.Minute*2); err != nil {
 			logger.Log().WithError(err).Error("Error connecting to cluster")
 		}
 
-		if err := k3smanager.Apply(ctx, cfg, secrets, providerSecrets); err != nil {
+		if err := k3smanager.Apply(ctx, cfg, secrets, providerSecrets, customResources); err != nil {
 			logger.Log().WithError(err).Error("Error applying k3smanager")
 			return err
 		}
