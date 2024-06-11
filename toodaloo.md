@@ -4,7 +4,6 @@
 
 | File | Line Number | Author | Message |
 | --- | --- | --- | --- |
-| [cmd/cluster_apply.go](cmd/cluster_apply.go#L72) | 72 | Simon Emms <simon@simonemms.com> | add a kubectl manager liveness check as the load balancer may not be ready |
 | [pkg/config/types.go](pkg/config/types.go#L43) | 43 | Simon Emms <simon@simonemms.com> | envPrefix not yet supported for slices |
 | [pkg/k3smanager/operator.go](pkg/k3smanager/operator.go#L145) | 145 | Simon Emms <simon@simonemms.com> | remove node from cluster before deleting |
 | [pkg/k3smanager/operator.go](pkg/k3smanager/operator.go#L169) | 169 | Simon Emms <simon@simonemms.com> | add node to cluster after creating |

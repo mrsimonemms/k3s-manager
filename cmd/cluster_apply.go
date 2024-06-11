@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"time"
 
 	"github.com/mrsimonemms/golang-helpers/logger"
 	"github.com/mrsimonemms/k3s-manager/pkg/k3smanager"
@@ -69,7 +70,9 @@ var clusterApplyCmd = &cobra.Command{
 			return err
 		}
 
-		// @todo(sje): add a kubectl manager liveness check as the load balancer may not be ready
+		if err := k3smanager.ConnectToCluster(ctx, secrets, time.Minute*2); err != nil {
+			logger.Log().WithError(err).Error("Error connecting to cluster")
+		}
 
 		if err := k3smanager.Apply(ctx, cfg, secrets, providerSecrets); err != nil {
 			logger.Log().WithError(err).Error("Error applying k3smanager")
