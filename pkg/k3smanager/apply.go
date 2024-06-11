@@ -25,6 +25,7 @@ import (
 	"os"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/Masterminds/sprig/v3"
 	"github.com/mrsimonemms/golang-helpers/logger"
@@ -178,6 +179,7 @@ func ParseTemplates(data TemplateData) (*string, error) {
 
 // Apply will only be run from outside the cluster
 func Apply(ctx context.Context, cfg *config.Config, secrets *provider.K3sAccessSecrets, providerSecrets map[string]string) error {
+	logger.Log().Info("Applying k3smanager resources to the cluster")
 	kubeconfig, err := login(secrets.Kubeconfig)
 	if err != nil {
 		return err
@@ -232,4 +234,39 @@ func Apply(ctx context.Context, cfg *config.Config, secrets *provider.K3sAccessS
 	})
 
 	return err
+}
+
+// Retries the login workflow until successful or timeout
+func ConnectToCluster(ctx context.Context, secrets *provider.K3sAccessSecrets, timeout time.Duration) error {
+	l := logger.Log().WithField("timeout", timeout)
+	l.Info("Attempting to connect to Kubernetes cluster")
+
+	count := 0
+	return common.WaitUntilReady(ctx, func() (bool, error) {
+		defer func() {
+			count++
+		}()
+
+		l = logger.Log().WithField("attempt", count)
+		l.Debug("New connection attempt")
+
+		kubeconfig, err := login(secrets.Kubeconfig)
+		if err != nil {
+			l.WithError(err).Debug("Unable to login")
+			return false, nil
+		}
+		l.Debug("Successfully connected to cluster - get list of nodes")
+
+		nodes, err := kubeconfig.Clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+		if err != nil {
+			l.WithError(err).Debug("Error getting node list")
+			return false, nil
+		}
+
+		l.WithField("nodes", nodes).Trace("Nodes currently attached to cluster")
+
+		l.Debug("Connection successful")
+
+		return true, nil
+	}, timeout)
 }
