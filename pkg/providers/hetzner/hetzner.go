@@ -96,7 +96,7 @@ type Hetzner struct {
 	logger      *logrus.Entry
 }
 
-func (h *Hetzner) ApplyCSI(context.Context) (*provider.ApplyCSIResponse, error) {
+func (h *Hetzner) CustomResources(context.Context) (*provider.CustomResourcesResponse, error) {
 	return nil, errNotImplemented
 }
 
